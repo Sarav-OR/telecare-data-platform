@@ -66,11 +66,25 @@ def latest_versions(path: Path, pk: list[str], since: str | None, until: str) ->
     return columns, rows
 
 
-def connect(server: str, database: str, auth: str, user: str | None):
+def connect(server: str, database: str, auth: str, user: str | None, attempts: int = 4):
+    """Connect with retries: a serverless / free-offer database that auto-paused needs up to
+    ~1 minute to resume, and the first login attempts time out while it wakes up."""
     import pyodbc
 
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return _connect_once(pyodbc, server, database, auth, user)
+        except pyodbc.OperationalError as exc:           # login timeout while the database resumes
+            last_error = exc
+            print(f"connection attempt {attempt}/{attempts} failed ({str(exc)[:90]}...) - retrying in 30 s")
+            time.sleep(30)
+    raise SystemExit(f"could not connect after {attempts} attempts: {last_error}")
+
+
+def _connect_once(pyodbc, server: str, database: str, auth: str, user: str | None):
     base = (f"Driver={{ODBC Driver 18 for SQL Server}};Server=tcp:{server},1433;Database={database};"
-            "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=60;")
+            "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=120;")
     if auth == "sql":
         pwd = os.environ.get("SQL_PASSWORD")
         if not user or not pwd:

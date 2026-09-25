@@ -1,5 +1,7 @@
 # Day 2 – Load the sources, deploy and run the Databricks ingestion
 
+> Why each step exists and who does it in a real project: see `00_why_and_who.md`.
+
 Goal: at the end, `telecare_dev.silver` holds 83 days of validated data from all 5 source
 systems (up to 15 Sep 2026), the clinical database is live in Azure SQL, and the
 source deliveries sit in `vendor-drop` ready for ADF tomorrow.
@@ -112,7 +114,12 @@ every row version up to that moment. Expected (±1 %):
 | encounter_diagnosis | ~171,600 |
 | prescription / referral / sick_note | ~73,700 / ~56,400 / ~12,100 |
 
-If it fails with a *login timeout*, your IP changed: server → Networking → add client IP.
+If it fails with a *login timeout* (error 258):
+1. The free-offer database auto-pauses when idle and takes ~1 min to wake up. The loader retries
+   4× (30 s apart); you can also wake it first: Portal → database → **Query editor** → `SELECT 1;`.
+2. Your IP changed: server → **Networking** → *Add your client IPv4 address* → Save.
+3. Port 1433 blocked (company network/VPN): `Test-NetConnection <server> -Port 1433` must show
+   `TcpTestSucceeded : True`.
 
 ✅ In the Query editor: `SELECT status, COUNT(*) FROM ehr.encounter GROUP BY status;`
 
