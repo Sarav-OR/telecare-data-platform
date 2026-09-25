@@ -1,0 +1,5 @@
+service_line_code,service_line_name,dialled_line,is_emergency,min_age,max_age
+MED_CENTER,24/7 Medical Center,+41610000100,false,0,120
+EMERGENCY,Emergency Hotline,+41610000144,true,0,120
+KIDS_LINE,Kids Line,+41610000200,false,0,15
+PHARMACY_CONNECT,Pharmacy Connect,+41610000300,false,0,120

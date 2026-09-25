@@ -1,0 +1,234 @@
+# =============================================================================
+# Data quality rules - silver layer (technical / plausibility level)
+# -----------------------------------------------------------------------------
+# Rules are declarative and evaluated by telecare_ingest.dq.engine; adding a rule
+# is a reviewed config change, not a code change.
+#
+#   severity: error -> record goes to ops.quarantine (with the rule names), never to silver
+#   severity: warn  -> record is kept, rule names are attached in `dq_warnings`
+#
+#   types: not_null | regex | allowed_values | range (min/max, optional `where`) | expression
+#
+# Two-level DQ: this file checks what a record *is* (parseable, typed, plausible).
+# Whether it is *valid for the business* (known ICD code, patient exists, SCD2
+# consistency, vault-vs-Kimball reconciliation) is tested in dbt.
+# =============================================================================
+
+datasets:
+
+  # --------------------------------------------------------------- S1 telephony
+  call_events:
+    key_columns: [event_id]
+    max_error_rate: 0.02
+    rules:
+      - {name: record_parseable,   type: expression, expression: "_corrupt_record IS NULL", severity: error}
+      - {name: event_id_not_null,  type: not_null, column: event_id,  severity: error}
+      - {name: call_id_not_null,   type: not_null, column: call_id,   severity: error}
+      - {name: event_ts_not_null,  type: not_null, column: event_ts,  severity: error}
+      - name: event_type_known
+        type: allowed_values
+        column: event_type
+        values: [OFFERED, QUEUED, ANSWERED, TRANSFERRED, CALLBACK_REQUESTED, ABANDONED, ENDED]
+        severity: error
+      - {name: caller_hash_format, type: regex, column: caller_phone_hash, pattern: '^[0-9a-f]{64}$', severity: error}
+      - {name: sequence_positive,  type: range, column: sequence_no, min: 1, severity: error}
+      - {name: event_not_in_future, type: expression, expression: "event_ts <= ingested_at + INTERVAL 10 MINUTES", severity: error}
+      - name: queue_code_known          # unknown queues keep flowing (unknown member in the marts)
+        type: allowed_values
+        column: queue_code
+        values: [Q_GEN_DE, Q_GEN_FR, Q_GEN_IT, Q_GEN_EN, Q_KIDS_DE, Q_KIDS_FR, Q_EMERG, Q_CONNECT, Q_ADMIN]
+        severity: warn
+
+  # --------------------------------------------------------------------- S2 app
+  app_events:
+    key_columns: [event_id]
+    max_error_rate: 0.03
+    rules:
+      - {name: record_parseable,      type: expression, expression: "_corrupt_record IS NULL", severity: error}
+      - {name: event_id_not_null,     type: not_null, column: event_id,    severity: error}
+      - {name: session_id_not_null,   type: not_null, column: session_id,  severity: error}
+      - {name: app_user_id_not_null,  type: not_null, column: app_user_id, severity: error}
+      - {name: server_ts_not_null,    type: not_null, column: server_ts,   severity: error}
+      - name: event_name_known
+        type: allowed_values
+        column: event_name
+        values: [app_open, symptom_check_started, symptom_check_completed, booking_created, booking_cancelled,
+                 chat_started, chat_ended, video_started, video_ended]
+        severity: error
+      - {name: platform_known, type: allowed_values, column: platform, values: [ios, android, web, pharmacy_terminal], severity: warn}
+      - {name: client_clock_plausible, type: expression, expression: "abs(client_clock_offset_s) <= 300", severity: warn}
+      - {name: not_test_account, type: expression, expression: "NOT is_test_account", severity: warn}
+
+  # ----------------------------------------------------------------- S5 devices
+  device_measurements:
+    key_columns: [measurement_id]
+    max_error_rate: 0.05
+    rules:
+      - {name: record_parseable,        type: expression, expression: "_corrupt_record IS NULL", severity: error}
+      - {name: measurement_id_not_null, type: not_null, column: measurement_id, severity: error}
+      - {name: device_serial_not_null,  type: not_null, column: device_serial,  severity: error}
+      - {name: metric_value_not_null,   type: not_null, column: metric_value,   severity: error}
+      - {name: measured_at_not_null,    type: not_null, column: measured_at,    severity: error}
+      - {name: device_serial_format,    type: regex, column: device_serial, pattern: '^TCD-[0-9]{6}$', severity: error}
+      - {name: metric_code_known, type: allowed_values, column: metric_code, values: [SBP, DBP, HR, SPO2, TEMP, GLU], severity: error}
+      - {name: measured_not_after_received, type: expression, expression: "measured_at <= received_at + INTERVAL 5 MINUTES", severity: error}
+      # physiological plausibility, after unit harmonisation (sensor faults, not patients)
+      - {name: sbp_plausible,  type: range, column: metric_value, min: 50, max: 260, where: "metric_code = 'SBP'",  severity: error}
+      - {name: dbp_plausible,  type: range, column: metric_value, min: 20, max: 160, where: "metric_code = 'DBP'",  severity: error}
+      - {name: hr_plausible,   type: range, column: metric_value, min: 20, max: 250, where: "metric_code = 'HR'",   severity: error}
+      - {name: spo2_plausible, type: range, column: metric_value, min: 50, max: 100, where: "metric_code = 'SPO2'", severity: error}
+      - {name: temp_plausible, type: range, column: metric_value, min: 30, max: 44,  where: "metric_code = 'TEMP'", severity: error}
+      - {name: glu_plausible,  type: range, column: metric_value, min: 20, max: 600, where: "metric_code = 'GLU'",  severity: error}
+      - {name: encounter_ref_present, type: not_null, column: encounter_ref, severity: warn}
+      - {name: not_late_arriving, type: expression, expression: "NOT is_late_arriving", severity: warn}
+
+  device_registry:
+    key_columns: [device_serial, snapshot_date]
+    max_error_rate: 0.01
+    rules:
+      - {name: device_serial_not_null, type: not_null, column: device_serial, severity: error}
+      - {name: snapshot_date_not_null, type: not_null, column: snapshot_date, severity: error}
+      - {name: device_serial_format,   type: regex, column: device_serial, pattern: '^TCD-[0-9]{6}$', severity: error}
+      - {name: status_valid, type: allowed_values, column: status, values: [ACTIVE, IN_REPAIR, RETIRED], severity: error}
+      - {name: firmware_semver, type: regex, column: firmware_version, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$', severity: warn}
+
+  # --------------------------------------------------------------------- S4 CRM
+  crm_insurers:
+    key_columns: [insurer_id, snapshot_date]
+    max_error_rate: 0.0
+    rules:
+      - {name: insurer_id_format,      type: regex, column: insurer_id, pattern: '^INS[0-9]{2}$', severity: error}
+      - {name: insurer_id_not_null,    type: not_null, column: insurer_id,    severity: error}
+      - {name: snapshot_date_not_null, type: not_null, column: snapshot_date, severity: error}
+
+  crm_insurance_plans:
+    key_columns: [plan_code, snapshot_date]
+    max_error_rate: 0.0
+    rules:
+      - {name: plan_code_not_null,     type: not_null, column: plan_code,     severity: error}
+      - {name: insurer_id_not_null,    type: not_null, column: insurer_id,    severity: error}
+      - {name: snapshot_date_not_null, type: not_null, column: snapshot_date, severity: error}
+      - {name: plan_model_valid, type: allowed_values, column: plan_model, values: [TELMED, HMO, FAMILY_DOCTOR, STANDARD], severity: error}
+
+  crm_patient_coverage:
+    key_columns: [coverage_id, snapshot_date]
+    max_error_rate: 0.01
+    rules:
+      - {name: coverage_id_not_null,   type: not_null, column: coverage_id,   severity: error}
+      - {name: snapshot_date_not_null, type: not_null, column: snapshot_date, severity: error}
+      - {name: patient_id_format, type: regex, column: patient_id, pattern: '^P[0-9]{7}$', severity: error}
+      - {name: plan_code_not_null,  type: not_null, column: plan_code,  severity: error}
+      - {name: valid_from_not_null, type: not_null, column: valid_from, severity: error}
+      - {name: validity_range, type: expression, expression: "valid_to IS NULL OR valid_to >= valid_from", severity: error}
+
+  crm_partners:
+    key_columns: [partner_id, snapshot_date]
+    max_error_rate: 0.01
+    rules:
+      - {name: record_parseable,       type: expression, expression: "_corrupt_record IS NULL", severity: error}
+      - {name: partner_id_not_null,    type: not_null, column: partner_id,    severity: error}
+      - {name: snapshot_date_not_null, type: not_null, column: snapshot_date, severity: error}
+      - {name: partner_id_format, type: regex, column: partner_id, pattern: '^PRT[0-9]{5}$', severity: error}
+      - {name: partner_type_valid, type: allowed_values, column: partner_type, values: [PHARMACY, GP_PRACTICE, SPECIALIST, HOSPITAL_ED], severity: error}
+      - {name: canton_present, type: not_null, column: canton, severity: warn}
+
+  # --------------------------------------------------------------------- S3 EHR
+  ehr_patient:
+    key_columns: [patient_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: patient_id_not_null,  type: not_null, column: patient_id,  severity: error}
+      - {name: modified_at_not_null, type: not_null, column: modified_at, severity: error}
+      - {name: patient_id_format, type: regex, column: patient_id, pattern: '^P[0-9]{7}$', severity: error}
+      # safety net for the PII column mask: if the pipeline identity is not in `pii_readers`, every
+      # date of birth reads as NULL - better to stop the load (circuit breaker) than to lose data
+      - {name: dob_not_null, type: not_null, column: date_of_birth, severity: error}
+      - {name: sex_valid, type: allowed_values, column: sex, values: [F, M, X], severity: error}
+      - {name: dob_plausible, type: expression, expression: "date_of_birth BETWEEN DATE'1900-01-01' AND current_date()", severity: error}
+      - name: canton_valid
+        type: allowed_values
+        column: canton
+        values: [ZH, BE, LU, UR, SZ, OW, NW, GL, ZG, FR, SO, BS, BL, SH, AR, AI, SG, GR, AG, TG, TI, VD, VS, NE, GE, JU]
+        severity: warn
+
+  ehr_patient_identifier:
+    key_columns: [identifier_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: identifier_id_not_null, type: not_null, column: identifier_id,    severity: error}
+      - {name: patient_id_not_null,    type: not_null, column: patient_id,       severity: error}
+      - {name: modified_at_not_null,   type: not_null, column: modified_at,      severity: error}
+      - {name: value_not_null,         type: not_null, column: identifier_value, severity: error}
+      - {name: identifier_type_valid, type: allowed_values, column: identifier_type, values: [PHONE_HASH, APP_USER_ID], severity: error}
+      - {name: phone_hash_format, type: regex, column: identifier_value, pattern: '^[0-9a-f]{64}$', where: "identifier_type = 'PHONE_HASH'", severity: error}
+
+  ehr_staff:
+    key_columns: [staff_id, modified_at]
+    max_error_rate: 0.0
+    rules:
+      - {name: staff_id_not_null,    type: not_null, column: staff_id,    severity: error}
+      - {name: modified_at_not_null, type: not_null, column: modified_at, severity: error}
+      - {name: role_valid, type: allowed_values, column: role, values: [PHYSICIAN, MEDICAL_ASSISTANT], severity: error}
+      - {name: team_valid, type: allowed_values, column: team, values: [GENERAL, PAEDIATRICS, EMERGENCY, TRIAGE], severity: error}
+      - {name: employment_pct_range, type: range, column: employment_pct, min: 10, max: 100, severity: warn}
+
+  ehr_encounter:
+    key_columns: [encounter_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: encounter_id_not_null, type: not_null, column: encounter_id, severity: error}
+      - {name: patient_id_not_null,   type: not_null, column: patient_id,   severity: error}
+      - {name: started_at_not_null,   type: not_null, column: started_at,   severity: error}
+      - {name: modified_at_not_null,  type: not_null, column: modified_at,  severity: error}
+      - {name: channel_valid, type: allowed_values, column: channel, values: [PHONE, VIDEO, CHAT], severity: error}
+      - {name: service_line_valid, type: allowed_values, column: service_line, values: [MED_CENTER, EMERGENCY, KIDS_LINE, PHARMACY_CONNECT], severity: error}
+      - {name: status_valid, type: allowed_values, column: status, values: [OPEN, CLOSED, CANCELLED], severity: error}
+      - {name: ended_after_started, type: expression, expression: "ended_at IS NULL OR ended_at >= started_at", severity: error}
+      - {name: triage_level_range, type: range, column: triage_level, min: 1, max: 5, severity: error}
+      - {name: closed_has_end, type: expression, expression: "status <> 'CLOSED' OR ended_at IS NOT NULL", severity: warn}
+      - {name: staff_assigned, type: not_null, column: staff_id, severity: warn}
+
+  ehr_encounter_diagnosis:
+    key_columns: [encounter_id, seq_no, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: encounter_id_not_null, type: not_null, column: encounter_id, severity: error}
+      - {name: seq_no_not_null,       type: not_null, column: seq_no,       severity: error}
+      - {name: modified_at_not_null,  type: not_null, column: modified_at,  severity: error}
+      - {name: icd10_not_null,        type: not_null, column: icd10_code,   severity: error}
+      - {name: icd10_format, type: regex, column: icd10_code, pattern: '^[A-Z][0-9]{2}(\.[0-9]{1,2})?$', severity: error}
+      - {name: diagnosis_role_valid, type: allowed_values, column: diagnosis_role, values: [PRIMARY, SECONDARY], severity: error}
+
+  ehr_prescription:
+    key_columns: [prescription_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: prescription_id_not_null, type: not_null, column: prescription_id, severity: error}
+      - {name: encounter_id_not_null,    type: not_null, column: encounter_id,    severity: error}
+      - {name: modified_at_not_null,     type: not_null, column: modified_at,     severity: error}
+      - {name: atc_format, type: regex, column: atc_code, pattern: '^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$', severity: error}
+      - {name: quantity_range, type: range, column: quantity, min: 1, max: 10, severity: warn}
+
+  ehr_referral:
+    key_columns: [referral_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: referral_id_not_null,  type: not_null, column: referral_id,  severity: error}
+      - {name: encounter_id_not_null, type: not_null, column: encounter_id, severity: error}
+      - {name: partner_id_not_null,   type: not_null, column: partner_id,   severity: error}
+      - {name: modified_at_not_null,  type: not_null, column: modified_at,  severity: error}
+      - name: referral_type_valid
+        type: allowed_values
+        column: referral_type
+        values: [GP_ROUTINE, GP_24H, SPECIALIST, EMERGENCY_DEPT, AMBULANCE, PHARMACY]
+        severity: error
+
+  ehr_sick_note:
+    key_columns: [sick_note_id, modified_at]
+    max_error_rate: 0.01
+    rules:
+      - {name: sick_note_id_not_null, type: not_null, column: sick_note_id, severity: error}
+      - {name: encounter_id_not_null, type: not_null, column: encounter_id, severity: error}
+      - {name: modified_at_not_null,  type: not_null, column: modified_at,  severity: error}
+      - {name: incapacity_range, type: range, column: incapacity_pct, min: 1, max: 100, severity: error}
+      - {name: days_range, type: range, column: days, min: 1, max: 30, severity: error}

@@ -1,0 +1,47 @@
+# =============================================================================
+# Environment configuration: PRD
+# Single source of truth for environment-specific values. <ANGLE_BRACKETS> are
+# placeholders. Secrets are NEVER stored here - only Key Vault secret names.
+# Consumed by: ADF ARM parameter files, the Databricks bundle target, dbt Cloud
+# environment variables.
+# =============================================================================
+environment: prd
+
+azure:
+  subscription_id: <AZURE_SUBSCRIPTION_ID>
+  resource_group: rg-telecare-prd-chn
+  region: switzerlandnorth
+
+storage:
+  account_name: sttelecareprdchn
+  containers: [vendor-drop, landing, checkpoints, lakehouse]
+
+key_vault:
+  name: kv-telecare-prd-chn
+  secrets:
+    sql_admin_password: sql-admin-password
+    databricks_token: databricks-pat          # used by ADF to call the Jobs API
+    dbt_cloud_api_token: dbt-cloud-api-token  # only if dbt_trigger_mode = api
+
+sql:
+  server: sql-telecare-prd-chn.database.windows.net
+  database: sqldb-telecare-ehr
+
+data_factory:
+  name: adf-telecare-prd-chn
+
+databricks:
+  workspace: dbw-telecare-dev-chn             # one workspace, one catalog per environment (cost)
+  workspace_url: https://adb-7405609552599914.14.azuredatabricks.net
+  catalog: telecare_prd
+  job_name: telecare_ingestion_prd
+  sql_warehouse: wh-telecare-dev
+
+dbt_cloud:
+  trigger_mode: schedule                      # schedule (Developer plan) | api (Starter+)
+  account_id: <DBT_CLOUD_ACCOUNT_ID>
+  job_id: <DBT_CLOUD_JOB_ID>
+
+data_quality:
+  max_error_rate_override: "0.02"   # empty = per-feed values in dq_rules.yml
+  late_arrival_threshold_minutes: 360

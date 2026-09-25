@@ -1,0 +1,22 @@
+select
+    {{ hash_key(['measurement_id']) }}                  as hk_measurement,
+    {{ hash_key(['device_serial']) }}                   as hk_device,
+    {{ hash_key(['encounter_ref']) }}                   as hk_encounter,
+    {{ hash_key(['partner_id']) }}                      as hk_partner,
+    measurement_id,
+    device_serial,
+    partner_id,
+    encounter_ref,
+    metric_code,
+    metric_value,
+    unit,
+    original_value,
+    original_unit,
+    measured_at,
+    received_at,
+    firmware_version,
+    is_late_arriving,
+    dq_warnings,
+    ingested_at                                         as load_datetime,
+    'DEV.measurements'                                  as record_source
+from {{ source('silver', 'device_measurements') }}

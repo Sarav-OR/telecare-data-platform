@@ -1,0 +1,134 @@
+version: 2
+
+# Kimball consumption layer. Surrogate keys of SCD2 dimensions are hashes of
+# (durable key, valid_from); code dimensions use the code. '-1' = unknown member.
+
+models:
+  # --------------------------------------------------------------- dimensions
+  - name: dim_date
+    description: "Calendar 2025-2027 with Swiss national public holidays."
+    columns: [{name: date_key, data_tests: [unique, not_null]}]
+  - name: dim_time_of_day
+    description: "One row per minute of the local Swiss day; night tariff 19:00-07:00."
+    columns: [{name: time_key, data_tests: [unique, not_null]}]
+  - name: dim_patient
+    description: "SCD2 patient dimension (canton, language). No date of birth: ages are computed per event in the facts."
+    columns:
+      - {name: patient_sk, data_tests: [unique, not_null]}
+      - {name: patient_id, description: "Durable key (pseudonymous EHR id)."}
+    data_tests: [not_empty, {scd2_integrity: {arguments: {entity_key: patient_id}}}]
+  - name: dim_staff
+    description: "SCD2 clinicians and medical assistants: team, specialty, employment."
+    columns: [{name: staff_sk, data_tests: [unique, not_null]}]
+    data_tests: [{scd2_integrity: {arguments: {entity_key: staff_id}}}]
+  - name: dim_insurance_plan
+    description: "SCD2 insurance plans (Telmed, HMO, family doctor, standard) with their insurer."
+    columns: [{name: plan_sk, data_tests: [unique, not_null]}]
+    data_tests: [{scd2_integrity: {arguments: {entity_key: plan_code}}}]
+  - name: dim_partner
+    description: "SCD2 partner network: pharmacies, GP practices, specialists, emergency departments."
+    columns: [{name: partner_sk, data_tests: [unique, not_null]}]
+    data_tests: [{scd2_integrity: {arguments: {entity_key: partner_id}}}]
+  - name: dim_device
+    description: "SCD2 pharmacy diagnostic devices, incl. firmware history."
+    columns: [{name: device_sk, data_tests: [unique, not_null]}]
+    data_tests: [{scd2_integrity: {arguments: {entity_key: device_serial}}}]
+  - {name: dim_channel, columns: [{name: channel_key, data_tests: [unique, not_null]}]}
+  - {name: dim_service_line, columns: [{name: service_line_key, data_tests: [unique, not_null]}]}
+  - {name: dim_triage_level, columns: [{name: triage_level_key, data_tests: [unique, not_null]}]}
+  - {name: dim_disposition, columns: [{name: disposition_key, data_tests: [unique, not_null]}]}
+  - {name: dim_diagnosis, description: "ICD-10-GM subset: chapter, block, code.", columns: [{name: diagnosis_key, data_tests: [unique, not_null]}]}
+  - {name: dim_medication, description: "ATC subset: level 1-2 and substance.", columns: [{name: medication_key, data_tests: [unique, not_null]}]}
+  - {name: dim_queue, columns: [{name: queue_key, data_tests: [unique, not_null]}]}
+  - {name: dim_contact_outcome, columns: [{name: contact_outcome_key, data_tests: [unique, not_null]}]}
+  - {name: dim_metric, description: "Vital signs with clinical alert thresholds.", columns: [{name: metric_key, data_tests: [unique, not_null]}]}
+
+  # ------------------------------------------------------------------ bridges
+  - name: bridge_encounter_diagnosis
+    description: "Many-to-many encounter-diagnosis with weighting factors summing to 1 per encounter."
+    columns:
+      - name: diagnosis_key
+        data_tests: [{relationships: {arguments: {to: ref('dim_diagnosis'), field: diagnosis_key}}}]
+    data_tests: [{unique_combination: {arguments: {columns: [encounter_key, seq_no]}}}]
+  - name: bridge_encounter_medication
+    columns:
+      - {name: prescription_id, data_tests: [unique, not_null]}
+      - name: medication_key
+        data_tests: [{relationships: {arguments: {to: ref('dim_medication'), field: medication_key}}}]
+  - name: map_patient_identity
+    description: "Phone hash / app user id to patient (current version); shared identities flagged."
+    data_tests: [{unique_combination: {arguments: {columns: [identifier_type, identifier_value, patient_id]}}}]
+
+  # -------------------------------------------------------------------- facts
+  - name: fact_encounter
+    description: >
+      One row per teleconsultation (accumulating snapshot). Point-in-time dimension keys,
+      change-driven incremental MERGE (late diagnosis coding updates the row in place).
+      Soft-deleted encounters are kept with is_deleted = true.
+    columns:
+      - {name: encounter_key, data_tests: [unique, not_null]}
+      - {name: patient_sk, data_tests: [{relationships: {arguments: {to: ref('dim_patient'), field: patient_sk}}}]}
+      - {name: staff_sk, data_tests: [{relationships: {arguments: {to: ref('dim_staff'), field: staff_sk}}}]}
+      - {name: plan_sk, data_tests: [{relationships: {arguments: {to: ref('dim_insurance_plan'), field: plan_sk}}}]}
+      - {name: referral_partner_sk, data_tests: [{relationships: {arguments: {to: ref('dim_partner'), field: partner_sk}}}]}
+      - {name: channel_key, data_tests: [{relationships: {arguments: {to: ref('dim_channel'), field: channel_key}}}]}
+      - {name: service_line_key, data_tests: [{relationships: {arguments: {to: ref('dim_service_line'), field: service_line_key}}}]}
+      - {name: triage_level_key, data_tests: [{relationships: {arguments: {to: ref('dim_triage_level'), field: triage_level_key}}}]}
+      - {name: disposition_key, data_tests: [{relationships: {arguments: {to: ref('dim_disposition'), field: disposition_key}}}]}
+      - {name: primary_diagnosis_key, data_tests: [{relationships: {arguments: {to: ref('dim_diagnosis'), field: diagnosis_key}}}]}
+      - {name: date_key, data_tests: [not_null, {relationships: {arguments: {to: ref('dim_date'), field: date_key}}}]}
+      - {name: time_key, data_tests: [{relationships: {arguments: {to: ref('dim_time_of_day'), field: time_key}}}]}
+      - name: status
+        data_tests: [{accepted_values: {arguments: {values: [OPEN, CLOSED, CANCELLED]}}}]
+    data_tests:
+      - expression_is_true:
+          arguments: {expression: "patient_sk <> '-1'", where: "not is_deleted"}
+          config: {severity: warn}
+      - expression_is_true:
+          arguments: {expression: "tariff_amount_chf >= 0", where: "status = 'CLOSED'"}
+      - expression_is_true:
+          arguments: {expression: "age_at_encounter between 0 and 120"}
+      - expression_is_true:
+          name: kids_line_only_for_children
+          arguments: {expression: "age_at_encounter <= 15", where: "service_line_key = 'KIDS_LINE'"}
+          config: {severity: warn, warn_if: ">50"}
+
+  - name: fact_contact
+    description: "One row per inbound contact (phone call or app session) with service-level measures and conversion to an encounter."
+    columns:
+      - {name: contact_key, data_tests: [unique, not_null]}
+      - {name: patient_sk, data_tests: [{relationships: {arguments: {to: ref('dim_patient'), field: patient_sk}}}]}
+      - {name: agent_staff_sk, data_tests: [{relationships: {arguments: {to: ref('dim_staff'), field: staff_sk}}}]}
+      - {name: queue_key, data_tests: [{relationships: {arguments: {to: ref('dim_queue'), field: queue_key}}}]}
+      - {name: contact_outcome_key, data_tests: [{relationships: {arguments: {to: ref('dim_contact_outcome'), field: contact_outcome_key}}}]}
+      - name: encounter_key
+        data_tests: [{relationships: {arguments: {to: ref('fact_encounter'), field: encounter_key}}}]
+      - name: patient_resolution
+        data_tests: [{accepted_values: {arguments: {values: [ENCOUNTER, VERIFIED_IDENTITY, UNRESOLVED]}}}]
+
+  - name: fact_diagnostic_measurement
+    description: "One row per pharmacy device measurement with clinical alert level."
+    columns:
+      - {name: measurement_key, data_tests: [unique, not_null]}
+      - {name: device_sk, data_tests: [{relationships: {arguments: {to: ref('dim_device'), field: device_sk}}}]}
+      - {name: metric_key, data_tests: [{relationships: {arguments: {to: ref('dim_metric'), field: metric_key}}}]}
+      - name: alert_level
+        data_tests: [{accepted_values: {arguments: {values: [NORMAL, WARNING, CRITICAL]}}}]
+
+exposures:
+  - name: telecare_operations_dashboard
+    label: TeleCare operations and quality dashboard (Power BI)
+    type: dashboard
+    maturity: medium
+    description: "Contact-centre service level, consultation outcomes, prescribing and data quality."
+    depends_on:
+      - ref('fact_contact')
+      - ref('fact_encounter')
+      - ref('fact_diagnostic_measurement')
+      - ref('bridge_encounter_diagnosis')
+      - ref('dim_date')
+      - ref('dim_patient')
+      - ref('dim_service_line')
+    owner:
+      name: TeleCare Data Platform
+      email: data-platform@example.ch

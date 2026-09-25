@@ -1,0 +1,87 @@
+# Triggered by ADF (Jobs API run-now) after the landing copy. No schedule on
+# purpose: ADF is the single orchestrator.
+resources:
+  jobs:
+    telecare_ingestion:
+      name: telecare_ingestion_${var.env}
+      description: Landing -> bronze (Auto Loader) -> silver (DQ, dedupe, MERGE) for 16 feeds from 5 systems
+      max_concurrent_runs: 1             # streaming checkpoints must never run concurrently
+      timeout_seconds: 5400
+      tags:
+        project: telecare
+        env: ${var.env}
+        layer: bronze-silver
+
+      email_notifications:
+        on_failure: ["${var.alert_email}"]
+      health:
+        rules:
+          - {metric: RUN_DURATION_SECONDS, op: GREATER_THAN, value: 3600}
+
+      parameters:
+        - {name: env,                 default: "${var.env}"}
+        - {name: catalog,             default: "${var.catalog}"}
+        - {name: landing_root,        default: "abfss://landing@${var.storage_account}.dfs.core.windows.net"}
+        - {name: checkpoint_root,     default: "abfss://checkpoints@${var.storage_account}.dfs.core.windows.net"}
+        - {name: orchestrator_run_id, default: "manual"}     # ADF passes pipeline().RunId
+        - {name: datasets,            default: ""}           # empty = all 16 feeds
+        - {name: max_error_rate,      default: "${var.max_error_rate}"}
+
+      job_clusters:
+        - job_cluster_key: single_node
+          new_cluster:
+            policy_id: ${var.cluster_policy_id}
+            spark_version: ${var.spark_version}
+            node_type_id: ${var.node_type_id}
+            num_workers: 0
+            data_security_mode: SINGLE_USER
+            runtime_engine: STANDARD
+            spark_conf:
+              spark.databricks.cluster.profile: singleNode
+              spark.master: "local[*, 4]"
+              spark.sql.session.timeZone: UTC
+            custom_tags:
+              ResourceClass: SingleNode
+              project: telecare
+            azure_attributes:
+              availability: ON_DEMAND_AZURE
+
+      tasks:
+        - task_key: setup_catalog
+          job_cluster_key: single_node
+          python_wheel_task:
+            package_name: telecare_ingest
+            entry_point: setup_catalog
+            named_parameters: &params
+              env: "{{job.parameters.env}}"
+              catalog: "{{job.parameters.catalog}}"
+              landing_root: "{{job.parameters.landing_root}}"
+              checkpoint_root: "{{job.parameters.checkpoint_root}}"
+              orchestrator_run_id: "{{job.parameters.orchestrator_run_id}}"
+              datasets: "{{job.parameters.datasets}}"
+              max_error_rate: "{{job.parameters.max_error_rate}}"
+          libraries:
+            - whl: ../dist/*.whl
+
+        - task_key: bronze
+          depends_on: [{task_key: setup_catalog}]
+          job_cluster_key: single_node
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          python_wheel_task:
+            package_name: telecare_ingest
+            entry_point: bronze
+            named_parameters: *params
+          libraries:
+            - whl: ../dist/*.whl
+
+        - task_key: silver
+          depends_on: [{task_key: bronze}]
+          job_cluster_key: single_node
+          max_retries: 1                 # DQ circuit-breaker stops are not transient
+          python_wheel_task:
+            package_name: telecare_ingest
+            entry_point: silver
+            named_parameters: *params
+          libraries:
+            - whl: ../dist/*.whl

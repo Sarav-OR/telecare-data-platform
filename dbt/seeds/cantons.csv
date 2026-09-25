@@ -1,0 +1,27 @@
+canton_code,canton_name,language_region,population_weight
+ZH,Zürich,de,18
+BE,Bern,de,12
+LU,Luzern,de,5
+UR,Uri,de,0.5
+SZ,Schwyz,de,2
+OW,Obwalden,de,0.5
+NW,Nidwalden,de,0.5
+GL,Glarus,de,0.5
+ZG,Zug,de,1.5
+FR,Fribourg,fr,4
+SO,Solothurn,de,3
+BS,Basel-Stadt,de,2
+BL,Basel-Landschaft,de,3
+SH,Schaffhausen,de,1
+AR,Appenzell Ausserrhoden,de,0.5
+AI,Appenzell Innerrhoden,de,0.2
+SG,St. Gallen,de,6
+GR,Graubünden,de,2.5
+AG,Aargau,de,8
+TG,Thurgau,de,3
+TI,Ticino,it,4
+VD,Vaud,fr,9
+VS,Valais,fr,4
+NE,Neuchâtel,fr,2
+GE,Genève,fr,6
+JU,Jura,fr,1

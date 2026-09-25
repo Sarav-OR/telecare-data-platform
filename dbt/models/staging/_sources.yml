@@ -1,0 +1,60 @@
+version: 2
+
+sources:
+  - name: silver
+    description: >
+      Typed, validated, de-duplicated data produced by the Databricks ingestion job
+      (telecare_ingestion). Records that failed technical data-quality rules are in
+      `ops.quarantine`, never here.
+    database: "{{ env_var('DBT_SOURCE_CATALOG', target.database) }}"
+    schema: "{{ env_var('DBT_SOURCE_SCHEMA', 'silver') }}"
+    config:
+      loaded_at_field: ingested_at
+      freshness:                      # CRM / registry snapshots are weekly
+        warn_after: {count: 8, period: day}
+        error_after: {count: 15, period: day}
+    tables:
+      - name: call_events
+        description: "S1 telephony: one row per contact-centre event."
+        config: &hourly
+          freshness:
+            warn_after: {count: 6, period: hour}
+            error_after: {count: 26, period: hour}
+        columns:
+          - {name: event_id, data_tests: [unique, not_null]}
+      - name: app_events
+        description: "S2 patient app: one row per app event, nested properties flattened."
+        config: *hourly
+        columns:
+          - {name: event_id, data_tests: [unique, not_null]}
+      - name: device_measurements
+        description: "S5 pharmacy device telemetry, unit-harmonised."
+        config: *hourly
+        columns:
+          - {name: measurement_id, data_tests: [unique, not_null]}
+      - {name: device_registry, description: "S5 weekly device registry snapshots."}
+      - {name: crm_insurers, description: "S4 weekly insurer snapshots."}
+      - {name: crm_insurance_plans, description: "S4 weekly insurance plan snapshots."}
+      - {name: crm_patient_coverage, description: "S4 weekly patient coverage snapshots (all periods, open and closed)."}
+      - {name: crm_partners, description: "S4 partner directory (REST API), weekly snapshots."}
+      - name: ehr_patient
+        description: "S3 EHR patient row versions (watermark extracts). Contains PII: date_of_birth, masked."
+        config: &daily
+          freshness:
+            warn_after: {count: 26, period: hour}
+            error_after: {count: 50, period: hour}
+      - {name: ehr_patient_identifier, config: *daily, description: "S3 verified phone hashes and app user ids per patient."}
+      - {name: ehr_staff, config: *daily, description: "S3 staff row versions."}
+      - {name: ehr_encounter, config: *daily, description: "S3 encounter row versions: opened, closed, re-coded, soft-deleted."}
+      - {name: ehr_encounter_diagnosis, config: *daily, description: "S3 diagnosis row versions per encounter and sequence."}
+      - {name: ehr_prescription, config: *daily, description: "S3 e-prescriptions."}
+      - {name: ehr_referral, config: *daily, description: "S3 referrals to partners."}
+      - {name: ehr_sick_note, config: *daily, description: "S3 sick-leave certificates."}
+
+  - name: ops
+    description: "Operational tables written by the ingestion job: DQ results and quarantine."
+    database: "{{ env_var('DBT_SOURCE_CATALOG', target.database) }}"
+    schema: "{{ env_var('DBT_OPS_SCHEMA', 'ops') }}"
+    tables:
+      - name: dq_rule_results
+      - name: quarantine

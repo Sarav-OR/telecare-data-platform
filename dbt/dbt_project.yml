@@ -1,0 +1,83 @@
+name: telecare
+version: "1.0.0"
+config-version: 2
+profile: telecare
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: target
+clean-targets: [target, dbt_packages, logs]
+
+flags:
+  send_anonymous_usage_stats: false
+
+# -----------------------------------------------------------------------------
+# Parameters - override per dbt Cloud job with  --vars '{lookback_hours: 72}'
+# Environment-level values (source catalog) come from dbt Cloud environment variables.
+# -----------------------------------------------------------------------------
+vars:
+  lookback_hours: 48                  # late data: facts re-process records loaded within this window
+  high_date: "9999-12-31 00:00:00"    # open end of SCD2 validity
+  unknown_key: "-1"                   # surrogate key of unknown members
+  service_level_seconds: 60           # contact centre service level: answered within 60 s
+  call_timeout_hours: 4               # calls without an END event are closed as TIMEOUT
+  local_timezone: "Europe/Zurich"     # business-facing dates and times
+
+seeds:
+  telecare:
+    +schema: reference
+    +docs: {node_color: "#9E9E9E"}
+    icd10_codes:
+      +column_types: {icd10_code: string}
+    metric_reference:
+      +column_types: {critical_low: double, warning_low: double, warning_high: double, critical_high: double}
+    swiss_public_holidays:
+      +column_types: {holiday_date: date}
+    triage_levels:
+      +column_types: {triage_level: integer}
+    service_lines:
+      +column_types: {dialled_line: string, min_age: integer, max_age: integer}
+    tariff_components:
+      +column_types: {amount_chf: "decimal(8,2)"}
+
+models:
+  telecare:
+    +file_format: delta               # ignored by DuckDB (CI)
+
+    staging:
+      +schema: staging
+      +materialized: view
+      +docs: {node_color: "#6A9FB5"}
+
+    raw_vault:
+      +schema: raw_vault
+      +materialized: incremental
+      +incremental_strategy: append   # insert-only; the vault macros skip keys/versions already loaded
+      +on_schema_change: append_new_columns
+      +tags: [vault]
+      +docs: {node_color: "#B07AA1"}
+
+    business_vault:
+      +schema: business_vault
+      +materialized: table
+      +tags: [vault]
+      +docs: {node_color: "#8E6C8A"}
+
+    marts:
+      +schema: marts
+      +materialized: table
+      +tags: [kimball]
+      +docs: {node_color: "#59A14F"}
+      facts:
+        +materialized: incremental
+        +incremental_strategy: merge
+        +on_schema_change: sync_all_columns
+
+data_tests:
+  telecare:
+    +severity: error
+    +store_failures: "{{ target.name == 'prod' }}"
+    reconciliation:
+      +tags: [reconciliation]

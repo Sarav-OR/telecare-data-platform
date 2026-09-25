@@ -1,0 +1,27 @@
+atc_code,substance,level1_code,level1_name,level2_code,level2_name,is_antibiotic
+N02BE01,paracetamol,N,Nervous system,N02,Analgesics,false
+M01AE01,ibuprofen,M,Musculo-skeletal system,M01,Antiinflammatory and antirheumatic products,false
+M01AE02,naproxen,M,Musculo-skeletal system,M01,Antiinflammatory and antirheumatic products,false
+M01AB05,diclofenac,M,Musculo-skeletal system,M01,Antiinflammatory and antirheumatic products,false
+R05CB01,acetylcysteine,R,Respiratory system,R05,Cough and cold preparations,false
+R01AA07,xylometazoline,R,Respiratory system,R01,Nasal preparations,false
+R06AE07,cetirizine,R,Respiratory system,R06,Antihistamines for systemic use,false
+R06AX27,desloratadine,R,Respiratory system,R06,Antihistamines for systemic use,false
+R03AC02,salbutamol,R,Respiratory system,R03,Drugs for obstructive airway diseases,false
+J01CA04,amoxicillin,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+J01CR02,amoxicillin and beta-lactamase inhibitor,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+J01FA10,azithromycin,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+J01MA02,ciprofloxacin,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+J01XX01,fosfomycin,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+J01XE01,nitrofurantoin,J,Antiinfectives for systemic use,J01,Antibacterials for systemic use,true
+A07DA03,loperamide,A,Alimentary tract and metabolism,A07,Antidiarrheals intestinal antiinflammatory/antiinfective agents,false
+A03FA03,domperidone,A,Alimentary tract and metabolism,A03,Drugs for functional gastrointestinal disorders,false
+A02BC01,omeprazole,A,Alimentary tract and metabolism,A02,Drugs for acid related disorders,false
+A02BC02,pantoprazole,A,Alimentary tract and metabolism,A02,Drugs for acid related disorders,false
+A06AD15,macrogol,A,Alimentary tract and metabolism,A06,Drugs for constipation,false
+S01AA01,chloramphenicol,S,Sensory organs,S01,Ophthalmologicals,true
+S01GX09,olopatadine,S,Sensory organs,S01,Ophthalmologicals,false
+D07AA02,hydrocortisone,D,Dermatologicals,D07,Corticosteroids dermatological preparations,false
+H02AB06,prednisolone,H,Systemic hormonal preparations excl. sex hormones and insulins,H02,Corticosteroids for systemic use,false
+N02CC01,sumatriptan,N,Nervous system,N02,Analgesics,false
+N05BA01,diazepam,N,Nervous system,N05,Psycholeptics,false

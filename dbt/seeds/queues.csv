@@ -1,0 +1,10 @@
+queue_code,queue_name,service_line_code,language,skill
+Q_GEN_DE,General German,MED_CENTER,de,GENERAL
+Q_GEN_FR,General French,MED_CENTER,fr,GENERAL
+Q_GEN_IT,General Italian,MED_CENTER,it,GENERAL
+Q_GEN_EN,General English,MED_CENTER,en,GENERAL
+Q_KIDS_DE,Kids German,KIDS_LINE,de,PAEDIATRICS
+Q_KIDS_FR,Kids French,KIDS_LINE,fr,PAEDIATRICS
+Q_EMERG,Emergency all languages,EMERGENCY,multi,EMERGENCY
+Q_CONNECT,Pharmacy Connect,PHARMACY_CONNECT,multi,GENERAL
+Q_ADMIN,Insurance and admin,MED_CENTER,multi,ADMIN

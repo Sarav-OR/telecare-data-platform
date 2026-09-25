@@ -1,0 +1,21 @@
+{
+  "spark_version": {
+    "type": "regex",
+    "pattern": "15\\.4\\.x-scala2\\.12|16\\.4\\.x-scala2\\.12",
+    "defaultValue": "15.4.x-scala2.12"
+  },
+  "node_type_id": {
+    "type": "allowlist",
+    "values": ["Standard_D4ds_v5", "Standard_DS3_v2"],
+    "defaultValue": "Standard_D4ds_v5"
+  },
+  "num_workers": { "type": "fixed", "value": 0, "hidden": true },
+  "spark_conf.spark.databricks.cluster.profile": { "type": "fixed", "value": "singleNode", "hidden": true },
+  "spark_conf.spark.master": { "type": "fixed", "value": "local[*, 4]", "hidden": true },
+  "custom_tags.ResourceClass": { "type": "fixed", "value": "SingleNode", "hidden": true },
+  "custom_tags.project": { "type": "fixed", "value": "telecare" },
+  "runtime_engine": { "type": "fixed", "value": "STANDARD", "hidden": true },
+  "autotermination_minutes": { "type": "range", "minValue": 10, "maxValue": 15, "defaultValue": 10 },
+  "data_security_mode": { "type": "fixed", "value": "SINGLE_USER" },
+  "azure_attributes.availability": { "type": "fixed", "value": "ON_DEMAND_AZURE", "hidden": true }
+}

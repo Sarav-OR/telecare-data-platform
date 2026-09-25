@@ -1,0 +1,8 @@
+disposition_code,disposition_name,care_setting,is_resolved_remotely,sort_order
+SELF_CARE,Self-care advice,home,true,1
+PHARMACY,Pharmacy visit,pharmacy,true,2
+GP_ROUTINE,GP appointment (routine),primary care,false,3
+GP_24H,GP within 24 hours,primary care,false,4
+SPECIALIST,Specialist referral,specialist,false,5
+EMERGENCY_DEPT,Emergency department,hospital,false,6
+AMBULANCE,Ambulance dispatched (144),emergency services,false,7

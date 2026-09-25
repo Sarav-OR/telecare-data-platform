@@ -1,0 +1,17 @@
+# local data and build output
+work/
+**/__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+*.duckdb
+# Databricks bundle state
+databricks/.databricks/
+# secrets never go to git
+.env
+*.pem

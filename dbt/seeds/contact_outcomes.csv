@@ -1,0 +1,10 @@
+contact_outcome_code,contact_outcome_name,is_answered,is_lost
+ANSWERED,Answered,true,false
+TRANSFERRED,Answered and transferred to physician,true,false
+ABANDONED,Abandoned in queue,false,true
+CALLBACK,Callback requested,false,false
+TIMEOUT,No end event received (closed after 4 h),false,false
+SESSION_COMPLETED,App session completed,true,false
+SESSION_CANCELLED,App booking cancelled,false,true
+SESSION_BROWSE_ONLY,App session without consultation,false,false
+IN_PROGRESS,Call still in progress,false,false

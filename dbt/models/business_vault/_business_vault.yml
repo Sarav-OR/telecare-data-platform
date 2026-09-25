@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: bv_call_session
+    description: One row per phone call, derived from telephony events (business rules for queue time, service level, outcome).
+    columns:
+      - {name: call_id, data_tests: [unique, not_null]}
+      - name: contact_outcome_code
+        data_tests: [{accepted_values: {arguments: {values: [TRANSFERRED, ANSWERED, CALLBACK, ABANDONED, TIMEOUT, IN_PROGRESS]}}}]
+      - name: queue_seconds
+        data_tests: [{expression_is_true: {arguments: {expression: "queue_seconds >= 0", where: "queue_seconds is not null"}}}]
+  - name: bv_app_session
+    description: One row per app session (test accounts removed).
+    columns:
+      - {name: session_id, data_tests: [unique, not_null]}
+  - name: bv_patient_identity
+    description: Current, verified TEL/APP identities resolved to EHR master patients; flags identities shared by several patients.
+    data_tests: [{unique_combination: {arguments: {columns: [hk_identity, hk_patient_master]}}}]
+
+unit_tests:
+  - name: call_session_outcomes_and_service_level
+    description: Queue time, service level and outcome are derived correctly from raw telephony events.
+    model: bv_call_session
+    given:
+      - input: ref('nhl_call_event')
+        rows:
+          # answered after 45 s -> within service level, transferred to a physician
+          - {hk_call: c1, call_id: C1, hk_patient: p1, event_type: OFFERED,     event_ts: "2026-09-01 10:00:00", sequence_no: 1, queue_code: Q_GEN_DE, dialled_line: "+41610000100", load_datetime: "2026-09-01 11:00:00"}
+          - {hk_call: c1, call_id: C1, hk_patient: p1, event_type: QUEUED,      event_ts: "2026-09-01 10:00:30", sequence_no: 2, queue_code: Q_GEN_DE, dialled_line: "+41610000100", load_datetime: "2026-09-01 11:00:00"}
+          - {hk_call: c1, call_id: C1, hk_patient: p1, event_type: ANSWERED,    event_ts: "2026-09-01 10:01:15", sequence_no: 3, queue_code: Q_GEN_DE, dialled_line: "+41610000100", agent_login: tc0001, load_datetime: "2026-09-01 11:00:00"}
+          - {hk_call: c1, call_id: C1, hk_patient: p1, event_type: TRANSFERRED, event_ts: "2026-09-01 10:03:00", sequence_no: 4, queue_code: Q_GEN_DE, dialled_line: "+41610000100", agent_login: tc0100, load_datetime: "2026-09-01 11:00:00"}
+          - {hk_call: c1, call_id: C1, hk_patient: p1, event_type: ENDED,       event_ts: "2026-09-01 10:10:00", sequence_no: 5, queue_code: Q_GEN_DE, dialled_line: "+41610000100", load_datetime: "2026-09-01 11:00:00"}
+          # abandoned after 120 s in the queue
+          - {hk_call: c2, call_id: C2, hk_patient: p2, event_type: OFFERED,   event_ts: "2026-09-01 12:00:00", sequence_no: 1, queue_code: Q_GEN_FR, dialled_line: "+41610000100", load_datetime: "2026-09-01 13:00:00"}
+          - {hk_call: c2, call_id: C2, hk_patient: p2, event_type: QUEUED,    event_ts: "2026-09-01 12:00:20", sequence_no: 2, queue_code: Q_GEN_FR, dialled_line: "+41610000100", load_datetime: "2026-09-01 13:00:00"}
+          - {hk_call: c2, call_id: C2, hk_patient: p2, event_type: ABANDONED, event_ts: "2026-09-01 12:02:20", sequence_no: 3, queue_code: Q_GEN_FR, dialled_line: "+41610000100", load_datetime: "2026-09-01 13:00:00"}
+          # answered after 90 s -> outside service level; later event keeps the watermark ahead
+          - {hk_call: c3, call_id: C3, hk_patient: p3, event_type: QUEUED,   event_ts: "2026-09-01 20:00:00", sequence_no: 1, queue_code: Q_EMERG, dialled_line: "+41610000144", load_datetime: "2026-09-01 21:00:00"}
+          - {hk_call: c3, call_id: C3, hk_patient: p3, event_type: ANSWERED, event_ts: "2026-09-01 20:01:30", sequence_no: 2, queue_code: Q_EMERG, dialled_line: "+41610000144", agent_login: tc0002, load_datetime: "2026-09-01 21:00:00"}
+    expect:
+      rows:
+        - {call_id: C1, contact_outcome_code: TRANSFERRED, queue_seconds: 45,  handle_seconds: 525, is_answered_within_sl: true,  agent_login: tc0001, physician_login: tc0100}
+        - {call_id: C2, contact_outcome_code: ABANDONED,   queue_seconds: 120, handle_seconds: null, is_answered_within_sl: false, agent_login: null, physician_login: null}
+        - {call_id: C3, contact_outcome_code: ANSWERED,    queue_seconds: 90,  handle_seconds: null, is_answered_within_sl: false, agent_login: tc0002, physician_login: null}

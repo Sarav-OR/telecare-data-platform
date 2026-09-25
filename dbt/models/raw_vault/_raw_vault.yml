@@ -1,0 +1,80 @@
+version: 2
+
+# Raw vault: source-aligned, insert-only, full history. Tests guard the vault's
+# structural guarantees (unique keys, no orphan links, one row per real change).
+
+models:
+  # --------------------------------------------------------------------- hubs
+  - name: hub_patient
+    description: Every patient identity - EHR patient ids plus telephony (TEL) and app (APP) identities, separated by the business-key collision code.
+    columns:
+      - {name: hk_patient, data_tests: [unique, not_null]}
+      - name: patient_bkcc
+        data_tests: [{accepted_values: {arguments: {values: [EHR, TEL, APP]}}}]
+    data_tests:
+      - unique_combination: {arguments: {columns: [patient_bkcc, patient_bk]}}
+  - {name: hub_staff, columns: [{name: hk_staff, data_tests: [unique, not_null]}, {name: staff_id, data_tests: [unique]}]}
+  - {name: hub_encounter, columns: [{name: hk_encounter, data_tests: [unique, not_null]}, {name: encounter_id, data_tests: [unique]}]}
+  - {name: hub_call, columns: [{name: hk_call, data_tests: [unique, not_null]}]}
+  - {name: hub_app_session, columns: [{name: hk_app_session, data_tests: [unique, not_null]}]}
+  - {name: hub_prescription, columns: [{name: hk_prescription, data_tests: [unique, not_null]}]}
+  - {name: hub_referral, columns: [{name: hk_referral, data_tests: [unique, not_null]}]}
+  - {name: hub_sick_note, columns: [{name: hk_sick_note, data_tests: [unique, not_null]}]}
+  - {name: hub_partner, columns: [{name: hk_partner, data_tests: [unique, not_null]}]}
+  - {name: hub_insurer, columns: [{name: hk_insurer, data_tests: [unique, not_null]}]}
+  - {name: hub_insurance_plan, columns: [{name: hk_insurance_plan, data_tests: [unique, not_null]}]}
+  - {name: hub_device, columns: [{name: hk_device, data_tests: [unique, not_null]}]}
+
+  # -------------------------------------------------------------------- links
+  - name: link_encounter
+    columns:
+      - {name: hk_link_encounter, data_tests: [unique, not_null]}
+      - name: hk_encounter
+        data_tests: [not_null, {relationships: {arguments: {to: ref('hub_encounter'), field: hk_encounter}}}]
+      - name: hk_patient
+        data_tests: [{relationships: {arguments: {to: ref('hub_patient'), field: hk_patient}}}]
+  - name: link_encounter_call
+    columns:
+      - {name: hk_link_encounter_call, data_tests: [unique, not_null]}
+      - name: hk_call
+        data_tests: [{relationships: {arguments: {to: ref('hub_call'), field: hk_call}}}]
+  - name: link_encounter_app_session
+    columns:
+      - {name: hk_link_encounter_app, data_tests: [unique, not_null]}
+      - name: hk_app_session
+        data_tests: [{relationships: {arguments: {to: ref('hub_app_session'), field: hk_app_session}}}]
+  - {name: link_prescription, columns: [{name: hk_link_prescription, data_tests: [unique, not_null]}]}
+  - name: link_referral
+    columns:
+      - {name: hk_link_referral, data_tests: [unique, not_null]}
+      - name: hk_partner
+        data_tests: [{relationships: {arguments: {to: ref('hub_partner'), field: hk_partner}}}]
+  - {name: link_sick_note, columns: [{name: hk_link_sick_note, data_tests: [unique, not_null]}]}
+  - {name: link_patient_plan, columns: [{name: hk_patient_plan, data_tests: [unique, not_null]}]}
+  - {name: link_plan_insurer, columns: [{name: hk_plan_insurer, data_tests: [unique, not_null]}]}
+  - name: sal_patient
+    description: Same-as link between a TEL/APP identity and the EHR master patient.
+    columns:
+      - {name: hk_sal_patient, data_tests: [unique, not_null]}
+      - name: hk_patient_master
+        data_tests: [{relationships: {arguments: {to: ref('hub_patient'), field: hk_patient}}}]
+  - {name: nhl_call_event, columns: [{name: hk_call_event, data_tests: [unique, not_null]}]}
+  - {name: nhl_app_event, columns: [{name: hk_app_event, data_tests: [unique, not_null]}]}
+  - {name: nhl_device_measurement, columns: [{name: hk_measurement, data_tests: [unique, not_null]}]}
+
+  # --------------------------------------------------------------- satellites
+  - name: sat_patient_ehr
+    description: Patient attributes, one row per real change. date_of_birth is PII (Unity Catalog column mask).
+    data_tests: [{unique_combination: {arguments: {columns: [hk_patient, applied_datetime]}}}]
+  - {name: sat_patient_identifier, data_tests: [{unique_combination: {arguments: {columns: [hk_sal_patient, applied_datetime]}}}]}
+  - {name: sat_staff, data_tests: [{unique_combination: {arguments: {columns: [hk_staff, applied_datetime]}}}]}
+  - {name: sat_encounter, data_tests: [{unique_combination: {arguments: {columns: [hk_encounter, applied_datetime]}}}]}
+  - {name: msat_encounter_diagnosis, data_tests: [{unique_combination: {arguments: {columns: [hk_encounter, seq_no, applied_datetime]}}}]}
+  - {name: sat_prescription, data_tests: [{unique_combination: {arguments: {columns: [hk_prescription, applied_datetime]}}}]}
+  - {name: sat_referral, data_tests: [{unique_combination: {arguments: {columns: [hk_referral, applied_datetime]}}}]}
+  - {name: sat_sick_note, data_tests: [{unique_combination: {arguments: {columns: [hk_sick_note, applied_datetime]}}}]}
+  - {name: sat_partner, data_tests: [{unique_combination: {arguments: {columns: [hk_partner, applied_datetime]}}}]}
+  - {name: sat_insurer, data_tests: [{unique_combination: {arguments: {columns: [hk_insurer, applied_datetime]}}}]}
+  - {name: sat_insurance_plan, data_tests: [{unique_combination: {arguments: {columns: [hk_insurance_plan, applied_datetime]}}}]}
+  - {name: effsat_patient_coverage, data_tests: [{unique_combination: {arguments: {columns: [hk_patient_plan, coverage_id, applied_datetime]}}}]}
+  - {name: sat_device, data_tests: [{unique_combination: {arguments: {columns: [hk_device, applied_datetime]}}}]}

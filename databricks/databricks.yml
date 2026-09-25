@@ -1,0 +1,68 @@
+# =============================================================================
+# Databricks Asset Bundle - TeleCare CH ingestion (landing -> bronze -> silver)
+#
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev      # dev: resources prefixed "[dev <user>]"
+#   databricks bundle run      -t dev telecare_ingestion
+#
+# All environment specifics are bundle variables. <...> values are placeholders:
+# replace them here or pass them in CI as BUNDLE_VAR_<name> environment variables.
+# Cost: single-node job cluster (policy-enforced), created per run and terminated
+# when the run ends - nothing can be left running.
+# =============================================================================
+bundle:
+  name: telecare_ingest
+
+include:
+  - resources/*.yml
+
+artifacts:
+  telecare_wheel:
+    type: whl
+    path: .
+    build: python -m build --wheel
+
+variables:
+  env:
+    description: Logical environment (dev | prd)
+  catalog:
+    description: Unity Catalog catalog of the environment
+  storage_account:
+    description: ADLS Gen2 account holding landing/ and checkpoints/
+  max_error_rate:
+    description: Circuit-breaker override for all feeds; empty = per-feed value from dq_rules.yml
+    default: ""
+  cluster_policy_id:
+    description: ID of the "telecare-single-node" cluster policy (policies/telecare_single_node_policy.json)
+    default: <CLUSTER_POLICY_ID>
+  node_type_id:
+    default: Standard_D4ds_v5
+  spark_version:
+    default: 15.4.x-scala2.12
+  alert_email:
+    default: <YOUR_EMAIL>
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405609552599914.14.azuredatabricks.net
+    variables:
+      env: dev
+      catalog: telecare_dev
+      storage_account: sttelecaredevchn
+
+  prd:
+    mode: production
+    workspace:
+      host: https://adb-7405609552599914.14.azuredatabricks.net   # same workspace, separate catalog (cost)
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    # In a real company: separate prod workspace and run_as a service principal:
+    # run_as:
+    #   service_principal_name: <SERVICE_PRINCIPAL_APP_ID>
+    variables:
+      env: prd
+      catalog: telecare_prd
+      storage_account: sttelecareprdchn
+      max_error_rate: "0.02"

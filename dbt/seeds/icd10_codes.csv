@@ -1,0 +1,37 @@
+icd10_code,description,block_code,block_name,chapter_code,chapter_name,symptom_category
+J06.9,Acute upper respiratory infection unspecified,J00-J06,Acute upper respiratory infections,X,Diseases of the respiratory system,RESPIRATORY
+J02.9,Acute pharyngitis unspecified,J00-J06,Acute upper respiratory infections,X,Diseases of the respiratory system,RESPIRATORY
+J03.9,Acute tonsillitis unspecified,J00-J06,Acute upper respiratory infections,X,Diseases of the respiratory system,RESPIRATORY
+J01.9,Acute sinusitis unspecified,J00-J06,Acute upper respiratory infections,X,Diseases of the respiratory system,RESPIRATORY
+J20.9,Acute bronchitis unspecified,J20-J22,Other acute lower respiratory infections,X,Diseases of the respiratory system,RESPIRATORY
+J45.9,Asthma unspecified,J40-J47,Chronic lower respiratory diseases,X,Diseases of the respiratory system,RESPIRATORY
+U07.1,COVID-19 virus identified,U00-U49,Provisional assignment of new diseases,XXII,Codes for special purposes,RESPIRATORY
+R05,Cough,R00-R09,Symptoms involving circulatory and respiratory systems,XVIII,Symptoms signs and abnormal findings,RESPIRATORY
+H66.9,Otitis media unspecified,H65-H75,Diseases of middle ear and mastoid,VIII,Diseases of the ear and mastoid process,ENT
+H61.2,Impacted cerumen,H60-H62,Diseases of external ear,VIII,Diseases of the ear and mastoid process,ENT
+H10.9,Conjunctivitis unspecified,H10-H13,Disorders of conjunctiva,VII,Diseases of the eye and adnexa,EYE
+A09.9,Gastroenteritis and colitis of unspecified origin,A00-A09,Intestinal infectious diseases,I,Certain infectious and parasitic diseases,GASTRO
+R10.4,Other and unspecified abdominal pain,R10-R19,Symptoms involving the digestive system and abdomen,XVIII,Symptoms signs and abnormal findings,GASTRO
+K21.9,Gastro-oesophageal reflux disease without oesophagitis,K20-K31,Diseases of oesophagus stomach and duodenum,XI,Diseases of the digestive system,GASTRO
+K59.0,Constipation,K55-K64,Other diseases of intestines,XI,Diseases of the digestive system,GASTRO
+N39.0,Urinary tract infection site not specified,N30-N39,Other diseases of the urinary system,XIV,Diseases of the genitourinary system,URINARY
+N30.0,Acute cystitis,N30-N39,Other diseases of the urinary system,XIV,Diseases of the genitourinary system,URINARY
+L50.9,Urticaria unspecified,L50-L54,Urticaria and erythema,XII,Diseases of the skin and subcutaneous tissue,SKIN_ALLERGY
+L30.9,Dermatitis unspecified,L20-L30,Dermatitis and eczema,XII,Diseases of the skin and subcutaneous tissue,SKIN_ALLERGY
+T78.4,Allergy unspecified,T66-T78,Other and unspecified effects of external causes,XIX,Injury poisoning and certain other consequences of external causes,SKIN_ALLERGY
+M54.2,Cervicalgia,M50-M54,Other dorsopathies,XIII,Diseases of the musculoskeletal system and connective tissue,MUSCULOSKELETAL
+M79.1,Myalgia,M70-M79,Other soft tissue disorders,XIII,Diseases of the musculoskeletal system and connective tissue,MUSCULOSKELETAL
+S93.40,Sprain and strain of ankle part unspecified,S90-S99,Injuries to the ankle and foot,XIX,Injury poisoning and certain other consequences of external causes,INJURY
+S60.0,Contusion of finger without damage to nail,S60-S69,Injuries to the wrist and hand,XIX,Injury poisoning and certain other consequences of external causes,INJURY
+T14.0,Superficial injury of unspecified body region,T08-T14,Injuries to unspecified part of trunk limb or body region,XIX,Injury poisoning and certain other consequences of external causes,INJURY
+R07.4,Chest pain unspecified,R00-R09,Symptoms involving circulatory and respiratory systems,XVIII,Symptoms signs and abnormal findings,CARDIO
+I10.90,Essential hypertension without hypertensive crisis,I10-I15,Hypertensive diseases,IX,Diseases of the circulatory system,CARDIO
+R42,Dizziness and giddiness,R40-R46,Symptoms involving cognition perception emotional state and behaviour,XVIII,Symptoms signs and abnormal findings,NEURO
+R51,Headache,R50-R69,General symptoms and signs,XVIII,Symptoms signs and abnormal findings,NEURO
+G43.9,Migraine unspecified,G40-G47,Episodic and paroxysmal disorders,VI,Diseases of the nervous system,NEURO
+F41.9,Anxiety disorder unspecified,F40-F48,Neurotic stress-related and somatoform disorders,V,Mental and behavioural disorders,MENTAL
+F43.2,Adjustment disorders,F40-F48,Neurotic stress-related and somatoform disorders,V,Mental and behavioural disorders,MENTAL
+R50.9,Fever unspecified,R50-R69,General symptoms and signs,XVIII,Symptoms signs and abnormal findings,GENERAL
+B34.9,Viral infection unspecified,B25-B34,Viral diseases,I,Certain infectious and parasitic diseases,GENERAL
+R53,Malaise and fatigue,R50-R69,General symptoms and signs,XVIII,Symptoms signs and abnormal findings,GENERAL
+Z76.0,Issue of repeat prescription,Z70-Z76,Persons encountering health services in other circumstances,XXI,Factors influencing health status and contact with health services,ADMIN

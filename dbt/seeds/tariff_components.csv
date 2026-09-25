@@ -1,0 +1,7 @@
+component_code,component_name,amount_chf
+BASE,Base teleconsultation fee,48.00
+PER_5_MIN,Each additional 5 minutes beyond 10 minutes,8.00
+NIGHT,Night surcharge (19:00-07:00),20.00
+WEEKEND_HOLIDAY,Weekend or public holiday surcharge,15.00
+EMERGENCY,Emergency line surcharge,25.00
+VIDEO,Video consultation supplement,5.00

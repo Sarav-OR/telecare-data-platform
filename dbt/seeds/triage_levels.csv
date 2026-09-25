@@ -1,0 +1,6 @@
+triage_level,triage_name,target_response,is_urgent
+1,Immediate,immediate emergency response,true
+2,Very urgent,within 10 minutes,true
+3,Urgent,within 60 minutes,true
+4,Standard,within 24 hours,false
+5,Non-urgent,routine,false

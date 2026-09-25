@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telecare_ingest"
+version = "1.0.0"
+description = "Landing -> bronze -> silver ingestion with declarative data quality for the TeleCare CH platform"
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=6.0"]          # pyspark / delta are provided by the Databricks runtime
+
+[project.optional-dependencies]
+dev = ["pyspark>=3.5", "pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+setup_catalog = "telecare_ingest.jobs.setup_catalog:main"
+bronze = "telecare_ingest.jobs.bronze:main"
+silver = "telecare_ingest.jobs.silver:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"telecare_ingest.conf" = ["*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B023"]

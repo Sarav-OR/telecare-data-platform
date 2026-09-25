@@ -1,0 +1,7 @@
+metric_code,metric_name,standard_unit,critical_low,warning_low,warning_high,critical_high
+SBP,Systolic blood pressure,mmHg,85,95,150,180
+DBP,Diastolic blood pressure,mmHg,50,60,95,110
+HR,Heart rate,bpm,40,50,110,130
+SPO2,Oxygen saturation,%,88,92,,
+TEMP,Body temperature,degC,35,35.5,37.8,39
+GLU,Blood glucose,mg/dL,54,70,180,250

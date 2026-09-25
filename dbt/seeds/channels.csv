@@ -1,0 +1,4 @@
+channel_code,channel_name,is_synchronous,is_digital
+PHONE,Phone call,true,false
+VIDEO,Video consultation,true,true
+CHAT,Chat consultation,false,true
