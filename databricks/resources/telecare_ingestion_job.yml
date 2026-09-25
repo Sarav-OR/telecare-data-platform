@@ -42,7 +42,8 @@ resources:
               spark.sql.session.timeZone: UTC
             custom_tags:
               ResourceClass: SingleNode
-              project: telecare
+              # no "project" tag here: the workspace's Azure tags (project/env/owner) are already
+              # applied to every cluster; repeating one is a conflict that Databricks rejects
             azure_attributes:
               availability: ON_DEMAND_AZURE
 

@@ -34,13 +34,13 @@ variables:
     default: ""
   cluster_policy_id:
     description: ID of the "telecare-single-node" cluster policy (policies/telecare_single_node_policy.json)
-    default: <CLUSTER_POLICY_ID>
+    default: 00015928D9D80671
   node_type_id:
     default: Standard_D4ds_v5
   spark_version:
     default: 15.4.x-scala2.12
   alert_email:
-    default: <YOUR_EMAIL>
+    default: saravanakumar.or@live.com
 
 targets:
   dev:

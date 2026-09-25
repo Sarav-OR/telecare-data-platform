@@ -13,7 +13,6 @@
   "spark_conf.spark.databricks.cluster.profile": { "type": "fixed", "value": "singleNode", "hidden": true },
   "spark_conf.spark.master": { "type": "fixed", "value": "local[*, 4]", "hidden": true },
   "custom_tags.ResourceClass": { "type": "fixed", "value": "SingleNode", "hidden": true },
-  "custom_tags.project": { "type": "fixed", "value": "telecare" },
   "runtime_engine": { "type": "fixed", "value": "STANDARD", "hidden": true },
   "autotermination_minutes": { "type": "range", "minValue": 10, "maxValue": 15, "defaultValue": 10 },
   "data_security_mode": { "type": "fixed", "value": "SINGLE_USER" },
