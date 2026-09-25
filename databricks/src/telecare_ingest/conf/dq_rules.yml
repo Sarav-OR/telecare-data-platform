@@ -140,8 +140,8 @@ datasets:
       - {name: patient_id_not_null,  type: not_null, column: patient_id,  severity: error}
       - {name: modified_at_not_null, type: not_null, column: modified_at, severity: error}
       - {name: patient_id_format, type: regex, column: patient_id, pattern: '^P[0-9]{7}$', severity: error}
-      # safety net for the PII column mask: if the pipeline identity is not in `pii_readers`, every
-      # date of birth reads as NULL - better to stop the load (circuit breaker) than to lose data
+      # a missing date of birth would silently break every age calculation downstream
+      # (and would be the symptom if a column mask were ever applied in this zone by mistake)
       - {name: dob_not_null, type: not_null, column: date_of_birth, severity: error}
       - {name: sex_valid, type: allowed_values, column: sex, values: [F, M, X], severity: error}
       - {name: dob_plausible, type: expression, expression: "date_of_birth BETWEEN DATE'1900-01-01' AND current_date()", severity: error}

@@ -267,6 +267,9 @@ patients under 16, and the Telmed plan share driving first-contact volume.
 ## 11. Decisions taken
 1. Volume: 90 days × 20,000 patients (confirmed).
 2. No 15-minute periodic snapshot fact (adds a pattern, not a point).
-3. PII: date of birth stored in source, bronze and silver, protected by a Unity Catalog column mask
-   (`pii_readers` group) and tag; marts expose only `age_at_encounter` and `age_band`.
+3. PII: date of birth stored in source, bronze and silver (restricted zone: schema access for pipeline
+   identities and data engineers only, column tagged `pii`). The Unity Catalog column mask
+   (`pii_readers` group) sits on the consumer-facing raw vault satellite `sat_patient_ehr`, because
+   dedicated job clusters cannot read or MERGE into masked tables. Marts expose only
+   `age_at_encounter` and `age_band`.
 4. CRM and device-registry snapshots are weekly.

@@ -210,7 +210,7 @@ def _ehr_audit() -> list[Column]:
 def std_ehr_patient(df: DataFrame, **_) -> DataFrame:
     return df.select(
         up("patient_id").alias("patient_id"),
-        F.col("date_of_birth").cast("date").alias("date_of_birth"),        # PII - masked in Unity Catalog
+        F.col("date_of_birth").cast("date").alias("date_of_birth"),        # PII - tagged here, masked in the vault
         up("sex").alias("sex"), up("canton").alias("canton"), s("postal_code").alias("postal_code"),
         F.lower(s("preferred_language")).alias("preferred_language"), *_ehr_audit(), *_meta(df))
 

@@ -179,19 +179,27 @@ databricks bundle deploy -t dev
 
 ---
 
-## B8b. PII group – do this BEFORE the first run
+## B8b. PII group
 
-The date of birth is protected by a Unity Catalog column mask: only members of the group
-`pii_readers` see it. **The identities that run the pipelines must be members** (they need the
-real value to compute ages); analysts are not. Today the job and dbt run as *you*, so:
+The date of birth is personal data. How it is protected:
+
+| Layer | Protection |
+|---|---|
+| bronze, silver (ingestion zone) | **restricted zone**: only pipeline identities and data engineers get access; column tagged `pii` |
+| raw vault `sat_patient_ehr` (consumer-facing) | Unity Catalog **column mask**: only members of `pii_readers` see the value |
+| marts | no date of birth at all, only `age_at_encounter` / `age_band` |
+
+Why not mask bronze/silver too? The ingestion job runs on a *dedicated* (single-user) job cluster,
+and dedicated compute cannot read or MERGE into tables with column masks
+(`ROW_COLUMN_ACCESS_POLICIES_NOT_SUPPORTED_ON_ASSIGNED_CLUSTERS`). Zone-level access for the
+engineering layers + masks on the served layers is the common production pattern.
+
+dbt builds the vault and needs the real value to compute ages, so its identity (today: you) must
+be in `pii_readers`:
 
 Databricks → your name (top right) → **Settings → Identity and access → Groups → Manage →
-Add group** → name `pii_readers` → add **yourself** as member.
-(If the button is not available, create it in the account console
-`https://accounts.azuredatabricks.net` → User management → Groups.)
-
-> If you forget this, nothing is silently lost: the rule `dob_not_null` quarantines every
-> patient row and the circuit breaker stops the silver task with a clear error.
+Add group** → name `pii_readers` → add **yourself** as member. Check in the SQL editor:
+`SELECT is_account_group_member('pii_readers');` → `true`.
 
 ---
 
@@ -207,8 +215,8 @@ What each task does:
 
 | Task | Result |
 |---|---|
-| `setup_catalog` | schemas `bronze`, `silver`, `ops`; 16 silver tables; DQ tables; PII mask function |
-| `bronze` | Auto Loader reads `landing/` → 16 bronze tables (+ masks `date_of_birth`) |
+| `setup_catalog` | schemas `bronze`, `silver`, `ops`; 16 silver tables; DQ tables; PII mask function; PII tags |
+| `bronze` | Auto Loader reads `landing/` → 16 bronze tables (+ tags `date_of_birth` as PII) |
 | `silver` | typing, unit/time-zone harmonisation, DQ rules, quarantine, de-duplication, MERGE |
 
 ---
@@ -234,11 +242,9 @@ GROUP BY ALL HAVING SUM(failed_rows) > 0 ORDER BY dataset, failed DESC;
 SELECT dataset, dq_errors, LEFT(payload, 200) AS payload
 FROM telecare_dev.ops.quarantine LIMIT 20;
 
--- 4. PII protection: mask + tag on the column
-DESCRIBE TABLE EXTENDED telecare_dev.silver.ehr_patient date_of_birth;
-SELECT patient_id, date_of_birth, canton FROM telecare_dev.silver.ehr_patient LIMIT 5;
--- demo for the screenshot: remove yourself from pii_readers, wait ~1 min, run the SELECT again
--- -> date_of_birth is NULL for you. Then add yourself back (dbt needs it).
+-- 4. PII classification: the tag on the column (the mask demo follows after dbt, on sat_patient_ehr)
+SELECT table_schema, column_name, tag_name, tag_value
+FROM telecare_dev.information_schema.column_tags WHERE column_name = 'date_of_birth';
 
 -- 5. time-zone harmonisation: EHR local time is now UTC (2 h earlier in summer)
 SELECT encounter_id, started_at FROM telecare_dev.silver.ehr_encounter ORDER BY started_at LIMIT 3;

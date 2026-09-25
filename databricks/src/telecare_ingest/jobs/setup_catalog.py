@@ -64,29 +64,36 @@ def ops_ddl(catalog: str) -> list[str]:
 def pii_function_ddl(catalog: str) -> str:
     """Only members of `pii_readers` see the date of birth; everyone else gets NULL.
 
-    The identities that *run* the pipelines (ingestion job, dbt) must be members, because
-    they need the real value to compute ages; analysts are not, so they never see it.
+    The mask is attached by dbt to the consumer-facing raw vault satellite (`sat_patient_ehr`),
+    which is served by the SQL warehouse. The identities that *build* it (dbt) must be members,
+    because they need the real value to compute ages; analysts are not, so they never see it.
     """
     return (f"CREATE OR REPLACE FUNCTION {catalog}.ops.mask_date_of_birth(dob DATE) RETURNS DATE "
             f"RETURN CASE WHEN is_account_group_member('{PII_GROUP}') THEN dob ELSE NULL END")
 
 
 def apply_pii_controls(spark: SparkSession, catalog: str, layer: str) -> None:
-    """Tag and mask the date of birth wherever it is stored (bronze and silver)."""
+    """Classify the date of birth in the ingestion zone (bronze, silver) with Unity Catalog tags.
+
+    No column mask here, on purpose: the ingestion job runs on a dedicated (single-user) job
+    cluster, and dedicated compute cannot read or MERGE into tables with row filters / column
+    masks. Bronze and silver are a *restricted zone* instead - only pipeline identities and data
+    engineers get USE SCHEMA - and the mask is enforced where consumers can reach the data
+    (raw vault satellite, built by dbt on the SQL warehouse). Marts only expose ages.
+    """
     table = f"{catalog}.{layer}.ehr_patient"
     if not spark.catalog.tableExists(table):
         return
-    spark.sql(f"ALTER TABLE {table} ALTER COLUMN date_of_birth SET MASK {catalog}.ops.mask_date_of_birth")
     spark.sql(f"ALTER TABLE {table} ALTER COLUMN date_of_birth SET TAGS ('pii' = 'date_of_birth', "
               f"'data_classification' = 'restricted')")
-    log.info("PII controls applied on %s.date_of_birth", table)
+    log.info("PII tags applied on %s.date_of_birth", table)
 
 
 def main(argv: list[str] | None = None) -> None:
     spark, cfg = bootstrap(argv)
     c = cfg.catalog
-    for schema, comment in [("bronze", "Raw, append-only copy of landing files"),
-                            ("silver", "Typed, validated, de-duplicated source data"),
+    for schema, comment in [("bronze", "Raw, append-only copy of landing files. Restricted zone: contains PII"),
+                            ("silver", "Typed, validated, de-duplicated source data. Restricted zone: contains PII"),
                             ("ops", "Data quality results, quarantine, run logs, PII functions")]:
         spark.sql(f"CREATE SCHEMA IF NOT EXISTS {c}.{schema} COMMENT '{comment}'")
     for stmt in ops_ddl(c) + [pii_function_ddl(c)]:

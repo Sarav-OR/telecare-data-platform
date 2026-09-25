@@ -38,7 +38,7 @@ sources:
       - {name: crm_patient_coverage, description: "S4 weekly patient coverage snapshots (all periods, open and closed)."}
       - {name: crm_partners, description: "S4 partner directory (REST API), weekly snapshots."}
       - name: ehr_patient
-        description: "S3 EHR patient row versions (watermark extracts). Contains PII: date_of_birth, masked."
+        description: "S3 EHR patient row versions (watermark extracts). Contains PII: date_of_birth (restricted zone, tagged; masked in sat_patient_ehr)."
         config: &daily
           freshness:
             warn_after: {count: 26, period: hour}

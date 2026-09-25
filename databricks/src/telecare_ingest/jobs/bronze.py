@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> None:
         except Exception as exc:  # collect all failures, then fail the task once
             log.exception("bronze %s failed", spec.name)
             failures.append(f"{spec.name}: {exc}")
-    apply_pii_controls(spark, cfg.catalog, "bronze")          # mask DOB as soon as bronze exists
+    apply_pii_controls(spark, cfg.catalog, "bronze")          # classify DOB as soon as bronze exists
     if failures:
         raise RuntimeError("bronze ingestion failed -> " + " | ".join(failures))
 
