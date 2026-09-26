@@ -1,0 +1,8 @@
+# Who may START the ingestion job from outside: the Data Factory managed identity (ADF is the
+# single orchestrator). Least privilege: CAN_MANAGE_RUN = start/cancel runs, not edit the job.
+# The identity must exist in the workspace first (Settings -> Identity and access ->
+# Service principals -> Add -> Microsoft Entra ID managed, with the application ID below).
+variables:
+  adf_sp_application_id:
+    description: Application (client) ID of the ADF managed identity (Portal -> Data factory -> Properties)
+    default: <ADF_MI_APPLICATION_ID>

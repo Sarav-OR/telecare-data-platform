@@ -1,0 +1,35 @@
+{
+    "name": "ds_adls_binary",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_adls_lake",
+            "type": "LinkedServiceReference"
+        },
+        "folder": {
+            "name": "telecare"
+        },
+        "annotations": [],
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "folder": {
+                "type": "string"
+            }
+        },
+        "type": "Binary",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "fileSystem": {
+                    "value": "@dataset().container",
+                    "type": "Expression"
+                },
+                "folderPath": {
+                    "value": "@dataset().folder",
+                    "type": "Expression"
+                }
+            }
+        }
+    }
+}

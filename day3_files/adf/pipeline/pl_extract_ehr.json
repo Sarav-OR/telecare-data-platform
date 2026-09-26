@@ -1,0 +1,179 @@
+{
+    "name": "pl_extract_ehr",
+    "properties": {
+        "description": "Incremental watermark extract of the EHR tables (Azure SQL) for one business date -> Parquet in landing. Window: [watermark, run_date + 1 day). The watermark moves only after a successful copy.",
+        "folder": {
+            "name": "telecare/ingest"
+        },
+        "parameters": {
+            "run_date": {
+                "type": "string"
+            },
+            "run_id": {
+                "type": "string"
+            }
+        },
+        "annotations": [],
+        "activities": [
+            {
+                "name": "lkp_tables",
+                "type": "Lookup",
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "dependsOn": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "queryTimeout": "00:10:00",
+                        "sqlReaderQuery": "SELECT table_name, select_list, watermark_column, CONVERT(varchar(19), watermark_value, 120) AS watermark_value FROM ctl.sql_extract WHERE is_active = 1"
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_ehr",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "fe_table",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "lkp_tables",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('lkp_tables').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": false,
+                    "batchCount": 4,
+                    "activities": [
+                        {
+                            "name": "copy_table_increment",
+                            "type": "Copy",
+                            "policy": {
+                                "timeout": "0.01:00:00",
+                                "retry": 2,
+                                "retryIntervalInSeconds": 60,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "dependsOn": [],
+                            "typeProperties": {
+                                "source": {
+                                    "type": "AzureSqlSource",
+                                    "queryTimeout": "01:00:00",
+                                    "partitionOption": "None",
+                                    "sqlReaderQuery": {
+                                        "value": "SELECT @{item().select_list} FROM ehr.@{item().table_name} WHERE @{item().watermark_column} >= '@{item().watermark_value}' AND @{item().watermark_column} < '@{formatDateTime(addDays(pipeline().parameters.run_date, 1), 'yyyy-MM-dd')} 00:00:00'",
+                                        "type": "Expression"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "ParquetSink",
+                                    "storeSettings": {
+                                        "type": "AzureBlobFSWriteSettings"
+                                    },
+                                    "formatSettings": {
+                                        "type": "ParquetWriteSettings"
+                                    }
+                                },
+                                "enableStaging": false,
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "typeConversion": true,
+                                    "typeConversionSettings": {
+                                        "allowDataTruncation": false,
+                                        "treatBooleanAsNumber": false
+                                    }
+                                }
+                            },
+                            "inputs": [
+                                {
+                                    "referenceName": "ds_sql_ehr",
+                                    "type": "DatasetReference"
+                                }
+                            ],
+                            "outputs": [
+                                {
+                                    "referenceName": "ds_adls_parquet",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "container": "landing",
+                                        "folder": {
+                                            "value": "@concat('ehr/', item().table_name, '/load_date=', pipeline().parameters.run_date)",
+                                            "type": "Expression"
+                                        },
+                                        "file": {
+                                            "value": "@concat(item().table_name, '.snappy.parquet')",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "sp_move_watermark",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "copy_table_increment",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "0.01:00:00",
+                                "retry": 2,
+                                "retryIntervalInSeconds": 60,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "ls_sql_ehr",
+                                "type": "LinkedServiceReference"
+                            },
+                            "typeProperties": {
+                                "storedProcedureName": "[ctl].[usp_set_watermark]",
+                                "storedProcedureParameters": {
+                                    "table_name": {
+                                        "value": {
+                                            "value": "@item().table_name",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "watermark_value": {
+                                        "value": {
+                                            "value": "@concat(formatDateTime(addDays(pipeline().parameters.run_date, 1), 'yyyy-MM-dd'), ' 00:00:00')",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    },
+                                    "row_count": {
+                                        "value": {
+                                            "value": "@activity('copy_table_increment').output.rowsCopied",
+                                            "type": "Expression"
+                                        },
+                                        "type": "Int64"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

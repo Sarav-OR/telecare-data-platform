@@ -1,0 +1,25 @@
+{
+    "name": "tr_batch_hourly",
+    "properties": {
+        "description": "Accelerated clock for the demo: every hour processes the next business date (a real platform: once a day after the source cut-off). Start it only after a successful manual run.",
+        "type": "ScheduleTrigger",
+        "runtimeState": "Stopped",
+        "annotations": [],
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pl_master_daily",
+                    "type": "PipelineReference"
+                }
+            }
+        ],
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Hour",
+                "interval": 1,
+                "startTime": "2026-09-27T07:05:00Z",
+                "timeZone": "UTC"
+            }
+        }
+    }
+}

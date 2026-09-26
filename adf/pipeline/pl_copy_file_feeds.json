@@ -1,0 +1,193 @@
+{
+    "name": "pl_copy_file_feeds",
+    "properties": {
+        "description": "Vendor file deliveries of one business date: vendor-drop -> landing (binary, folder structure kept). Feeds and their folder layout come from ctl.file_feed; a feed due on the date but missing fails the run.",
+        "folder": {
+            "name": "telecare/ingest"
+        },
+        "parameters": {
+            "run_date": {
+                "type": "string"
+            },
+            "run_id": {
+                "type": "string"
+            }
+        },
+        "annotations": [],
+        "activities": [
+            {
+                "name": "lkp_feeds_due",
+                "type": "Lookup",
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "dependsOn": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "queryTimeout": "00:10:00",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT feed_name, folder_prefix, date_path_format FROM ctl.file_feed WHERE is_active = 1 ','AND (delivery_day IS NULL OR delivery_day = DATENAME(weekday, CAST(''', pipeline().parameters.run_date, ''' AS date)))')",
+                            "type": "Expression"
+                        }
+                    },
+                    "dataset": {
+                        "referenceName": "ds_sql_ehr",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "fe_feed",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "lkp_feeds_due",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('lkp_feeds_due').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": false,
+                    "batchCount": 4,
+                    "activities": [
+                        {
+                            "name": "get_delivery_folder",
+                            "type": "GetMetadata",
+                            "policy": {
+                                "timeout": "0.01:00:00",
+                                "retry": 2,
+                                "retryIntervalInSeconds": 60,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "dependsOn": [],
+                            "typeProperties": {
+                                "dataset": {
+                                    "referenceName": "ds_adls_binary",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "container": "vendor-drop",
+                                        "folder": {
+                                            "value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                },
+                                "fieldList": [
+                                    "exists"
+                                ],
+                                "storeSettings": {
+                                    "type": "AzureBlobFSReadSettings",
+                                    "recursive": true
+                                },
+                                "formatSettings": {
+                                    "type": "BinaryReadSettings"
+                                }
+                            }
+                        },
+                        {
+                            "name": "if_delivered",
+                            "type": "IfCondition",
+                            "dependsOn": [
+                                {
+                                    "activity": "get_delivery_folder",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@activity('get_delivery_folder').output.exists",
+                                    "type": "Expression"
+                                },
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "copy_feed",
+                                        "type": "Copy",
+                                        "policy": {
+                                            "timeout": "0.01:00:00",
+                                            "retry": 2,
+                                            "retryIntervalInSeconds": 60,
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "dependsOn": [],
+                                        "typeProperties": {
+                                            "source": {
+                                                "type": "BinarySource",
+                                                "storeSettings": {
+                                                    "type": "AzureBlobFSReadSettings",
+                                                    "recursive": true
+                                                }
+                                            },
+                                            "sink": {
+                                                "type": "BinarySink",
+                                                "storeSettings": {
+                                                    "type": "AzureBlobFSWriteSettings",
+                                                    "copyBehavior": "PreserveHierarchy"
+                                                }
+                                            },
+                                            "enableStaging": false
+                                        },
+                                        "inputs": [
+                                            {
+                                                "referenceName": "ds_adls_binary",
+                                                "type": "DatasetReference",
+                                                "parameters": {
+                                                    "container": "vendor-drop",
+                                                    "folder": {
+                                                        "value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        "outputs": [
+                                            {
+                                                "referenceName": "ds_adls_binary",
+                                                "type": "DatasetReference",
+                                                "parameters": {
+                                                    "container": "landing",
+                                                    "folder": {
+                                                        "value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "ifFalseActivities": [
+                                    {
+                                        "name": "fail_missing_delivery",
+                                        "type": "Fail",
+                                        "dependsOn": [],
+                                        "typeProperties": {
+                                            "errorCode": "MISSING_DELIVERY",
+                                            "message": {
+                                                "value": "@concat('Delivery missing: feed ', item().feed_name, ' for ', pipeline().parameters.run_date, ' (expected vendor-drop/', concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format)), ')')",
+                                                "type": "Expression"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

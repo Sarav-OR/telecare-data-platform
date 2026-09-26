@@ -1,0 +1,26 @@
+{
+    "name": "ds_rest_partners",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_rest_partner_api",
+            "type": "LinkedServiceReference"
+        },
+        "folder": {
+            "name": "telecare"
+        },
+        "annotations": [],
+        "parameters": {
+            "relative_url": {
+                "type": "string"
+            }
+        },
+        "type": "RestResource",
+        "typeProperties": {
+            "relativeUrl": {
+                "value": "@dataset().relative_url",
+                "type": "Expression"
+            }
+        },
+        "schema": []
+    }
+}

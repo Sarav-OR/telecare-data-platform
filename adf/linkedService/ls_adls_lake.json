@@ -1,0 +1,13 @@
+{
+    "name": "ls_adls_lake",
+    "properties": {
+        "description": "ADLS Gen2 sttelecaredevchn - authenticated with the factory's system-assigned managed identity",
+        "type": "AzureBlobFS",
+        "annotations": [
+            "telecare"
+        ],
+        "typeProperties": {
+            "url": "https://sttelecaredevchn.dfs.core.windows.net/"
+        }
+    }
+}
