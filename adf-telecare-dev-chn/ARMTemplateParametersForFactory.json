@@ -1,0 +1,21 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-telecare-dev-chn"
+		},
+		"ls_adls_lake_properties_typeProperties_url": {
+			"value": "https://sttelecaredevchn.dfs.core.windows.net/"
+		},
+		"ls_rest_partner_api_properties_typeProperties_url": {
+			"value": "https://sttelecaredevchn.z1.web.core.windows.net/api/"
+		},
+		"ls_sql_ehr_properties_typeProperties_server": {
+			"value": "sql-telecare-dev-chn.database.windows.net"
+		},
+		"ls_sql_ehr_properties_typeProperties_database": {
+			"value": "sqldb-telecare-ehr"
+		}
+	}
+}

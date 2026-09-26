@@ -1,0 +1,1663 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-telecare-dev-chn"
+		},
+		"ls_adls_lake_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://sttelecaredevchn.dfs.core.windows.net/"
+		},
+		"ls_rest_partner_api_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://sttelecaredevchn.z1.web.core.windows.net/api/"
+		},
+		"ls_sql_ehr_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sql-telecare-dev-chn.database.windows.net"
+		},
+		"ls_sql_ehr_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "sqldb-telecare-ehr"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_copy_file_feeds')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Vendor file deliveries of one business date: vendor-drop -> landing (binary, folder structure kept). Feeds and their folder layout come from ctl.file_feed; a feed due on the date but missing fails the run.",
+				"activities": [
+					{
+						"name": "lkp_feeds_due",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "@concat('SELECT feed_name, folder_prefix, date_path_format FROM ctl.file_feed WHERE is_active = 1 ','AND (delivery_day IS NULL OR delivery_day = DATENAME(weekday, CAST(''', pipeline().parameters.run_date, ''' AS date)))')",
+									"type": "Expression"
+								},
+								"queryTimeout": "00:10:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_sql_ehr",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "fe_feed",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "lkp_feeds_due",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('lkp_feeds_due').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 4,
+							"activities": [
+								{
+									"name": "get_delivery_folder",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "ds_adls_binary",
+											"type": "DatasetReference",
+											"parameters": {
+												"container": "vendor-drop",
+												"folder": {
+													"value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true
+										},
+										"formatSettings": {
+											"type": "BinaryReadSettings"
+										}
+									}
+								},
+								{
+									"name": "if_delivered",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "get_delivery_folder",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@activity('get_delivery_folder').output.exists",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "fail_missing_delivery",
+												"type": "Fail",
+												"dependsOn": [],
+												"userProperties": [],
+												"typeProperties": {
+													"message": {
+														"value": "@concat('Delivery missing: feed ', item().feed_name, ' for ', pipeline().parameters.run_date, ' (expected vendor-drop/', concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format)), ')')",
+														"type": "Expression"
+													},
+													"errorCode": "MISSING_DELIVERY"
+												}
+											}
+										],
+										"ifTrueActivities": [
+											{
+												"name": "copy_feed",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.01:00:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "BinarySource",
+														"storeSettings": {
+															"type": "AzureBlobFSReadSettings",
+															"recursive": true
+														}
+													},
+													"sink": {
+														"type": "BinarySink",
+														"storeSettings": {
+															"type": "AzureBlobFSWriteSettings",
+															"copyBehavior": "PreserveHierarchy"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "ds_adls_binary",
+														"type": "DatasetReference",
+														"parameters": {
+															"container": "vendor-drop",
+															"folder": {
+																"value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+																"type": "Expression"
+															}
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "ds_adls_binary",
+														"type": "DatasetReference",
+														"parameters": {
+															"container": "landing",
+															"folder": {
+																"value": "@concat(item().folder_prefix, '/', formatDateTime(pipeline().parameters.run_date, item().date_path_format))",
+																"type": "Expression"
+															}
+														}
+													}
+												]
+											}
+										]
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"run_date": {
+						"type": "string"
+					},
+					"run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare/ingest"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_sql_ehr')]",
+				"[concat(variables('factoryId'), '/datasets/ds_adls_binary')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_copy_partner_api')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Partner directory from the CRM REST API (weekly, Mondays): follows the $.next link of every page and writes one JSON object per partner to landing/crm/partners/<date>/.",
+				"activities": [
+					{
+						"name": "if_snapshot_day",
+						"type": "IfCondition",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(dayOfWeek(pipeline().parameters.run_date), 1)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "copy_partners_api",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "RestSource",
+											"httpRequestTimeout": "00:01:40",
+											"requestInterval": "00.00:00:00.010",
+											"requestMethod": "GET",
+											"paginationRules": {
+												"AbsoluteUrl": "$.next"
+											}
+										},
+										"sink": {
+											"type": "JsonSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "JsonWriteSettings",
+												"filePattern": "setOfObjects"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"mappings": [
+												{
+													"source": {
+														"path": "[['partnerId']"
+													},
+													"sink": {
+														"path": "$['partnerId']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['type']"
+													},
+													"sink": {
+														"path": "$['type']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['name']"
+													},
+													"sink": {
+														"path": "$['name']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['connectEnabled']"
+													},
+													"sink": {
+														"path": "$['connectEnabled']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['active']"
+													},
+													"sink": {
+														"path": "$['active']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['openedOn']"
+													},
+													"sink": {
+														"path": "$['openedOn']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['deactivatedOn']"
+													},
+													"sink": {
+														"path": "$['deactivatedOn']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['address']['city']"
+													},
+													"sink": {
+														"path": "$['city']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['address']['postalCode']"
+													},
+													"sink": {
+														"path": "$['postalCode']"
+													}
+												},
+												{
+													"source": {
+														"path": "[['address']['canton']"
+													},
+													"sink": {
+														"path": "$['canton']"
+													}
+												},
+												{
+													"source": {
+														"path": "$['snapshot_date']"
+													},
+													"sink": {
+														"path": "$['snapshot_date']"
+													}
+												}
+											],
+											"collectionReference": "$['data']"
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_rest_partners",
+											"type": "DatasetReference",
+											"parameters": {
+												"relative_url": {
+													"value": "@concat('partners/', pipeline().parameters.run_date, '/page-0001.json')",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_adls_json",
+											"type": "DatasetReference",
+											"parameters": {
+												"container": "landing",
+												"folder": {
+													"value": "@concat('crm/partners/', pipeline().parameters.run_date)",
+													"type": "Expression"
+												},
+												"file": "partners.json"
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"run_date": {
+						"type": "string"
+					},
+					"run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare/ingest"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_rest_partners')]",
+				"[concat(variables('factoryId'), '/datasets/ds_adls_json')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_extract_ehr')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Incremental watermark extract of the EHR tables (Azure SQL) for one business date -> Parquet in landing. Window: [watermark, run_date + 1 day). The watermark moves only after a successful copy.",
+				"activities": [
+					{
+						"name": "lkp_tables",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT table_name, select_list, watermark_column, CONVERT(varchar(19), watermark_value, 120) AS watermark_value FROM ctl.sql_extract WHERE is_active = 1",
+								"queryTimeout": "00:10:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_sql_ehr",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "fe_table",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "lkp_tables",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('lkp_tables').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 4,
+							"activities": [
+								{
+									"name": "copy_table_increment",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT @{item().select_list} FROM ehr.@{item().table_name} WHERE @{item().watermark_column} >= '@{item().watermark_value}' AND @{item().watermark_column} < '@{formatDateTime(addDays(pipeline().parameters.run_date, 1), 'yyyy-MM-dd')} 00:00:00'",
+												"type": "Expression"
+											},
+											"queryTimeout": "01:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": false,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_sql_ehr",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_adls_parquet",
+											"type": "DatasetReference",
+											"parameters": {
+												"container": "landing",
+												"folder": {
+													"value": "@concat('ehr/', item().table_name, '/load_date=', pipeline().parameters.run_date)",
+													"type": "Expression"
+												},
+												"file": {
+													"value": "@concat(item().table_name, '.snappy.parquet')",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sp_move_watermark",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "copy_table_increment",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[ctl].[usp_set_watermark]",
+										"storedProcedureParameters": {
+											"table_name": {
+												"value": {
+													"value": "@item().table_name",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"watermark_value": {
+												"value": {
+													"value": "@concat(formatDateTime(addDays(pipeline().parameters.run_date, 1), 'yyyy-MM-dd'), ' 00:00:00')",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"row_count": {
+												"value": {
+													"value": "@activity('copy_table_increment').output.rowsCopied",
+													"type": "Expression"
+												},
+												"type": "Int64"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "ls_sql_ehr",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"run_date": {
+						"type": "string"
+					},
+					"run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare/ingest"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_sql_ehr')]",
+				"[concat(variables('factoryId'), '/datasets/ds_adls_parquet')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_ehr')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_master_daily')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Entry point (scheduled). Reads the next business date from ctl.batch_state and runs it, or does nothing when the sources have no newer day. Concurrency 1: runs never overlap.",
+				"activities": [
+					{
+						"name": "lkp_next_business_date",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT CONVERT(varchar(10), DATEADD(day, 1, last_completed_date), 23) AS run_date, CASE WHEN DATEADD(day, 1, last_completed_date) <= end_date THEN 1 ELSE 0 END AS has_work FROM ctl.batch_state WHERE batch_name = 'telecare_daily'",
+								"queryTimeout": "00:10:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_sql_ehr",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": true
+						}
+					},
+					{
+						"name": "if_new_business_date",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "lkp_next_business_date",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('lkp_next_business_date').output.firstRow.has_work, 1)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "run_business_date",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "pl_run_business_date",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"run_date": {
+												"value": "@activity('lkp_next_business_date').output.firstRow.run_date",
+												"type": "Expression"
+											},
+											"run_id": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"concurrency": 1,
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"folder": {
+					"name": "telecare/orchestrate"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_sql_ehr')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_run_business_date')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_run_business_date')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "One business date end to end: the three extracts in parallel -> Databricks landing->bronze->silver -> advance the batch clock. Any failure is logged to ctl.run_log and re-raised (try/catch/rethrow).",
+				"activities": [
+					{
+						"name": "log_started",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[ctl].[usp_log_step]",
+							"storedProcedureParameters": {
+								"run_id": {
+									"value": {
+										"value": "@pipeline().parameters.run_id",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"pipeline_name": {
+									"value": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"run_date": {
+									"value": {
+										"value": "@pipeline().parameters.run_date",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"step": {
+									"value": "run_business_date",
+									"type": "String"
+								},
+								"status": {
+									"value": "STARTED",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_sql_ehr",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "run_file_feeds",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "log_started",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_copy_file_feeds",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"run_date": {
+									"value": "@pipeline().parameters.run_date",
+									"type": "Expression"
+								},
+								"run_id": {
+									"value": "@pipeline().parameters.run_id",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "run_ehr_extract",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "log_started",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_extract_ehr",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"run_date": {
+									"value": "@pipeline().parameters.run_date",
+									"type": "Expression"
+								},
+								"run_id": {
+									"value": "@pipeline().parameters.run_id",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "run_partner_api",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "log_started",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_copy_partner_api",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"run_date": {
+									"value": "@pipeline().parameters.run_date",
+									"type": "Expression"
+								},
+								"run_id": {
+									"value": "@pipeline().parameters.run_id",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "run_databricks",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "run_file_feeds",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "run_ehr_extract",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "run_partner_api",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "pl_run_databricks_job",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"run_id": {
+									"value": "@pipeline().parameters.run_id",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "complete_batch",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "run_databricks",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[ctl].[usp_complete_batch]",
+							"storedProcedureParameters": {
+								"batch_name": {
+									"value": "telecare_daily",
+									"type": "String"
+								},
+								"run_date": {
+									"value": {
+										"value": "@pipeline().parameters.run_date",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"run_id": {
+									"value": {
+										"value": "@pipeline().parameters.run_id",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_sql_ehr",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "log_succeeded",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "complete_batch",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[ctl].[usp_log_step]",
+							"storedProcedureParameters": {
+								"run_id": {
+									"value": {
+										"value": "@pipeline().parameters.run_id",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"pipeline_name": {
+									"value": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"run_date": {
+									"value": {
+										"value": "@pipeline().parameters.run_date",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"step": {
+									"value": "run_business_date",
+									"type": "String"
+								},
+								"status": {
+									"value": "SUCCEEDED",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_sql_ehr",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "log_failed",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "complete_batch",
+								"dependencyConditions": [
+									"Failed",
+									"Skipped"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[ctl].[usp_log_step]",
+							"storedProcedureParameters": {
+								"run_id": {
+									"value": {
+										"value": "@pipeline().parameters.run_id",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"pipeline_name": {
+									"value": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"run_date": {
+									"value": {
+										"value": "@pipeline().parameters.run_date",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"step": {
+									"value": "run_business_date",
+									"type": "String"
+								},
+								"status": {
+									"value": "FAILED",
+									"type": "String"
+								},
+								"message": {
+									"value": "Failed or skipped step - see the ADF monitor for this run id",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "ls_sql_ehr",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "rethrow_failure",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "log_failed",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat('Business date ', pipeline().parameters.run_date, ' failed - batch clock NOT advanced; rerun is safe.')",
+								"type": "Expression"
+							},
+							"errorCode": "BUSINESS_DATE_FAILED"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"run_date": {
+						"type": "string"
+					},
+					"run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare/orchestrate"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_ehr')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_copy_file_feeds')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_extract_ehr')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_copy_partner_api')]",
+				"[concat(variables('factoryId'), '/pipelines/pl_run_databricks_job')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_run_databricks_job')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Starts the Databricks ingestion job (Jobs API run-now, managed identity), polls every minute until it ends, and fails this pipeline if the run did not succeed. The ADF run id is passed on for lineage.",
+				"activities": [
+					{
+						"name": "web_run_now",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.01:00:00",
+							"retry": 1,
+							"retryIntervalInSeconds": 60,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"url": {
+								"value": "@concat(pipeline().parameters.workspace_url, '/api/2.1/jobs/run-now')",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "@json(concat('{\"job_id\": ', pipeline().parameters.job_id, ', \"job_parameters\": {\"orchestrator_run_id\": \"', pipeline().parameters.run_id, '\"}}'))",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+							}
+						}
+					},
+					{
+						"name": "until_run_finished",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "web_run_now",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@contains(createArray('TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'), variables('life_cycle_state'))",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "wait_60s",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								},
+								{
+									"name": "web_get_run",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "wait_60s",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"headers": {},
+										"url": {
+											"value": "@concat(pipeline().parameters.workspace_url, '/api/2.1/jobs/runs/get?run_id=', string(activity('web_run_now').output.run_id))",
+											"type": "Expression"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+										}
+									}
+								},
+								{
+									"name": "set_life_cycle_state",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "web_get_run",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "life_cycle_state",
+										"value": {
+											"value": "@activity('web_get_run').output.state.life_cycle_state",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "set_result_state",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "web_get_run",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "result_state",
+										"value": {
+											"value": "@coalesce(activity('web_get_run').output.state?.result_state, '')",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "set_state_message",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "web_get_run",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "state_message",
+										"value": {
+											"value": "@coalesce(activity('web_get_run').output.state?.state_message, '')",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"timeout": "0.02:00:00"
+						}
+					},
+					{
+						"name": "if_run_failed",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "until_run_finished",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@not(equals(variables('result_state'), 'SUCCESS'))",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "fail_databricks_run",
+									"type": "Fail",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"message": {
+											"value": "@concat('Databricks run ', string(activity('web_run_now').output.run_id), ' ended ', variables('life_cycle_state'), '/', variables('result_state'), ': ', variables('state_message'))",
+											"type": "Expression"
+										},
+										"errorCode": "DATABRICKS_RUN_FAILED"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"run_id": {
+						"type": "string"
+					},
+					"workspace_url": {
+						"type": "string",
+						"defaultValue": "https://adb-7405609552599914.14.azuredatabricks.net"
+					},
+					"job_id": {
+						"type": "string",
+						"defaultValue": "175309398118457"
+					}
+				},
+				"variables": {
+					"life_cycle_state": {
+						"type": "String",
+						"defaultValue": "PENDING"
+					},
+					"result_state": {
+						"type": "String"
+					},
+					"state_message": {
+						"type": "String"
+					}
+				},
+				"folder": {
+					"name": "telecare/orchestrate"
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_adls_binary')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_lake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string"
+					},
+					"folder": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_lake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_adls_json')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_lake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string"
+					},
+					"folder": {
+						"type": "string"
+					},
+					"file": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					},
+					"encodingName": "UTF-8"
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_lake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_adls_parquet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_adls_lake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container": {
+						"type": "string"
+					},
+					"folder": {
+						"type": "string"
+					},
+					"file": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_adls_lake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_rest_partners')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_rest_partner_api",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"relative_url": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "telecare"
+				},
+				"annotations": [],
+				"type": "RestResource",
+				"typeProperties": {
+					"relativeUrl": {
+						"value": "@dataset().relative_url",
+						"type": "Expression"
+					}
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_rest_partner_api')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_sql_ehr')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Generic Azure SQL dataset: every activity supplies its own query or procedure",
+				"linkedServiceName": {
+					"referenceName": "ls_sql_ehr",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "telecare"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sql_ehr')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_adls_lake')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "ADLS Gen2 sttelecaredevchn - authenticated with the factory's system-assigned managed identity",
+				"annotations": [
+					"telecare"
+				],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('ls_adls_lake_properties_typeProperties_url')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_rest_partner_api')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Partner directory REST API (simulated with the storage static website). Replace <zone> with your endpoint's zone.",
+				"annotations": [
+					"telecare"
+				],
+				"type": "RestService",
+				"typeProperties": {
+					"url": "[parameters('ls_rest_partner_api_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_sql_ehr')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Azure SQL: EHR source schema (ehr) and orchestration control schema (ctl) - managed identity",
+				"annotations": [
+					"telecare"
+				],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('ls_sql_ehr_properties_typeProperties_server')]",
+					"database": "[parameters('ls_sql_ehr_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SystemAssignedManagedIdentity"
+				},
+				"version": "2.0"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/tr_batch_hourly')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Accelerated clock for the demo: every hour processes the next business date (a real platform: once a day after the source cut-off). Start it only after a successful manual run.",
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "pl_master_daily",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Hour",
+						"interval": 1,
+						"startTime": "2026-09-27T07:05:00Z",
+						"timeZone": "UTC"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/pl_master_daily')]"
+			]
+		}
+	]
+}
