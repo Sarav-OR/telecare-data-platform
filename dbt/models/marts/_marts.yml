@@ -6,7 +6,7 @@ version: 2
 models:
   # --------------------------------------------------------------- dimensions
   - name: dim_date
-    description: "Calendar 2025-2027 with Swiss national public holidays."
+    description: "Calendar 2025-2027 with Swiss national public holidays listed."
     columns: [{name: date_key, data_tests: [unique, not_null]}]
   - name: dim_time_of_day
     description: "One row per minute of the local Swiss day; night tariff 19:00-07:00."
