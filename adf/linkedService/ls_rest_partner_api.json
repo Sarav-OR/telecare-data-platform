@@ -1,15 +1,15 @@
 {
-    "name": "ls_rest_partner_api",
-    "properties": {
-        "description": "Partner directory REST API (simulated with the storage static website). Replace <zone> with your endpoint's zone.",
-        "type": "RestService",
-        "annotations": [
-            "telecare"
-        ],
-        "typeProperties": {
-            "url": "https://sttelecaredevchn.<zone>.web.core.windows.net/api/",
-            "enableServerCertificateValidation": true,
-            "authenticationType": "Anonymous"
-        }
-    }
+	"name": "ls_rest_partner_api",
+	"properties": {
+		"description": "Partner directory REST API (simulated with the storage static website). Replace <zone> with your endpoint's zone.",
+		"annotations": [
+			"telecare"
+		],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "https://sttelecaredevchn.z1.web.core.windows.net/api/",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Anonymous"
+		}
+	}
 }
