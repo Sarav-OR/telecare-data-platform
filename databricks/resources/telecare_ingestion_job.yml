@@ -12,6 +12,10 @@ resources:
         env: ${var.env}
         layer: bronze-silver
 
+      permissions:
+        - service_principal_name: ${var.adf_sp_application_id}
+          level: CAN_MANAGE_RUN  
+
       email_notifications:
         on_failure: ["${var.alert_email}"]
       health:

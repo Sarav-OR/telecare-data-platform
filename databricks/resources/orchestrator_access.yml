@@ -5,4 +5,4 @@
 variables:
   adf_sp_application_id:
     description: Application (client) ID of the ADF managed identity (Portal -> Data factory -> Properties)
-    default: <ADF_MI_APPLICATION_ID>
+    default: 75a834ca-c898-4727-8ee0-dcf295a90f10
