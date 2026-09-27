@@ -1,0 +1,42 @@
+# Continuous deployment of the Databricks ingestion bundle to DEV after a merge to main.
+# The same bundle goes to production with `-t prd`, from CI only, behind a GitHub environment
+# with required reviewers and a service principal (see docs/setup/05_day4_cicd_guide.md).
+name: deploy-databricks-dev
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "databricks/**"
+      - ".github/workflows/deploy-databricks-dev.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-databricks-dev          # never two deployments at the same time
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev                      # GitHub environment holding the dev secrets
+    env:
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build tooling for the wheel
+        run: pip install build
+      - uses: databricks/setup-cli@main
+      - name: Validate bundle
+        working-directory: databricks
+        run: databricks bundle validate -t dev
+      - name: Deploy bundle
+        working-directory: databricks
+        run: databricks bundle deploy -t dev
