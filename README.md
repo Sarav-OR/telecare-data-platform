@@ -1,5 +1,7 @@
 # TeleCare CH – Data Platform (ADF · Databricks · dbt Cloud)
 
+[![ci](https://github.com/Sarav-OR/telecare-data-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarav-OR/telecare-data-platform/actions/workflows/ci.yml)
+
 Production-style data platform for a **fictional Swiss telemedicine provider**, built to
 demonstrate a Data Vault → Kimball migration on Azure. All data is synthetic.
 

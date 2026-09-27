@@ -29,7 +29,7 @@ import pyarrow.parquet as pq
 
 # EHR extract schema as ADF writes it from Azure SQL. Timestamps are the source's local wall-clock
 # time (no offset); they are stored as UTC-typed values and converted to real UTC in silver.
-TS, D, S, I, B = pa.timestamp("us", tz="UTC"), pa.date32(), pa.string(), pa.int32(), pa.bool_()
+TS, D, S, I, B = pa.timestamp("us", tz="UTC"), pa.date32(), pa.string(), pa.int32(), pa.bool_()  # noqa: E741 (short type aliases)
 DEC = pa.decimal128(8, 2)
 _AUDIT = [("is_deleted", B), ("created_at", TS), ("modified_at", TS)]
 EHR = {

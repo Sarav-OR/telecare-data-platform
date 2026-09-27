@@ -1,0 +1,98 @@
+# Continuous integration: runs on every pull request and on main.
+# No cloud resources needed - the whole chain runs on the GitHub runner:
+#   generator -> Spark ingestion (same code as Databricks) -> DuckDB -> dbt build (+ all tests)
+#   -> proof that an incremental dbt run equals a full refresh.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  WORK: ${{ github.workspace }}/work
+
+jobs:
+  lint-and-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-java@v4          # local Spark for the ingestion unit tests
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: |
+          ruff check data_generator dbt/scripts
+          cd databricks && ruff check .
+      - name: Unit tests - ingestion framework (DQ engine, transforms, processing)
+        working-directory: databricks
+        run: python -m pytest -q
+      - name: ADF definitions are valid JSON
+        run: python -c "import json, glob; files = glob.glob('adf/**/*.json', recursive=True); [json.load(open(f)) for f in files]; print(len(files), 'ADF files ok')"
+      - name: Wheel builds
+        working-directory: databricks
+        run: python -m build --wheel
+
+  end-to-end:
+    needs: lint-and-unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: 1. Generate 30 days of synthetic data for 5 source systems
+        run: python data_generator/generate.py --out $WORK/telecare --days 30 --patients 4000 --contacts-per-day 400
+
+      - name: 2. Ingestion landing -> bronze -> silver (16 feeds, DQ, quarantine)
+        run: python databricks/scripts/run_local_pipeline.py --generated $WORK/telecare --out $WORK/lakehouse
+
+      - name: 3. dbt build on DuckDB (staging, raw vault, business vault, Kimball marts + all tests)
+        run: |
+          python dbt/scripts/load_silver_to_duckdb.py --lakehouse $WORK/lakehouse --db $WORK/ci.duckdb
+          cd dbt
+          DBT_DUCKDB_PATH=$WORK/ci.duckdb DBT_PROFILES_DIR=. dbt build --target ci
+
+      - name: 4. Incremental run == full refresh (late-arriving data)
+        run: |
+          python databricks/scripts/run_local_pipeline.py --generated $WORK/telecare --out $WORK/initial --until 2026-07-12
+          python dbt/scripts/check_incremental_equivalence.py --initial $WORK/initial --final $WORK/lakehouse --workdir $WORK/inc
+
+      - name: Keep dbt logs and artifacts when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-artifacts
+          path: |
+            dbt/target/run_results.json
+            dbt/target/manifest.json
+            dbt/logs/
+          if-no-files-found: ignore

@@ -1,0 +1,7 @@
+# Repo-wide lint rules (databricks/pyproject.toml carries the same settings for the package)
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B023"]
