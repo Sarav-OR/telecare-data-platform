@@ -69,7 +69,7 @@ python data_generator/load_ehr_to_sql.py --server sql-telecare-dev-chn.database.
 
 ✅ Every table shows `since=2026-09-15 …` and a few thousand rows (only the changes).
 
-> Interview point: a watermark extract only sees the **current** state of a row. If a row changed
+> Design note: a watermark extract only sees the **current** state of a row. If a row changed
 > twice between two extracts, the middle version is never seen. That is the known limit of
 > watermark loads; true change data capture (CDC / change tracking) captures every version.
 
