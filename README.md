@@ -167,11 +167,11 @@ Screenshots from the dev environment (all in [`docs/img/`](docs/img/)):
 |---|---|
 | **ADF** – one business date: master pipeline and its child pipelines | ![ADF master run](docs/img/01_adf_master_run.png) |
 | **Databricks** – ingestion job run graph (setup → bronze → silver) | ![Databricks job run](docs/img/02_databricks_job_run.png) |
-| **Data quality** – rule results and quarantined rows per feed | ![DQ results](docs/img/03_dq_results.png) |
+| **Data coverage** – business-date range and row counts per fact table | ![Data coverage](docs/img/03_dq_results.png) |
 | **dbt Cloud** – production build, 259 models and tests passed | ![dbt Cloud run](docs/img/04_dbt_cloud_run.png) |
 | **Lineage** – staging → raw vault → business vault → marts | ![dbt lineage](docs/img/05_dbt_lineage.png) |
 | **CI/CD** – pull request with all required checks green | ![PR checks](docs/img/06_pr_checks.png) |
-| **PII** – Unity Catalog column mask for users outside `pii_readers` | ![PII mask](docs/img/07_pii_mask.png) |
+| **PII** – Unity Catalog column mask on date_of_birth | ![PII mask](docs/img/07_pii_mask.png) |
 
 ## Repository map
 
