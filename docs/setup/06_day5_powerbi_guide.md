@@ -57,7 +57,7 @@ many-to-one, from fact to dimension):
 
 Mark `dim_date` as date table: select it → **Table tools → Mark as date table** → `calendar_date`.
 
-**Interview point:** conformed dimensions (`dim_date`, `dim_channel`, `dim_service_line`) are shared by
+**Design note:** conformed dimensions (`dim_date`, `dim_channel`, `dim_service_line`) are shared by
 both facts, so one slicer filters encounters and contacts consistently. The diagnosis bridge
 resolves the many-to-many between encounters and diagnoses; `weighting_factor` avoids double counting.
 
