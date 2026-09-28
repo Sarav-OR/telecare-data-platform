@@ -1635,7 +1635,7 @@
 			"properties": {
 				"description": "Accelerated clock for the demo: every hour processes the next business date (a real platform: once a day after the source cut-off). Start it only after a successful manual run.",
 				"annotations": [],
-				"runtimeState": "Started",
+				"runtimeState": "Stopped",
 				"pipelines": [
 					{
 						"pipelineReference": {
