@@ -251,9 +251,9 @@ SELECT encounter_id, started_at FROM telecare_dev.silver.ehr_encounter ORDER BY 
 ```
 
 Expected counts are listed in `docs/setup/02_expected_counts.md` (from the identical local run).
-Small differences (< 0.1 %) are fine; paste your results in the chat.
+Small differences (< 0.1 %) are fine.
 
-Take screenshots of: the job run graph, query 2 and query 4. They go into the README later.
+Screenshots of the job run graph are kept in `docs/img/`.
 
 ---
 

@@ -61,7 +61,7 @@ dbt build         # 78 models + 168 tests + 1 unit test (~5-8 min on 2X-Small)
 ```
 
 Expected: `PASS=259 WARN=0 ERROR=0` (locally measured; a few WARN are fine).
-If a test fails, copy the failing test name and the compiled SQL (Details tab) into the chat.
+If a test fails, open the Details tab: the compiled SQL returns the failing rows and shows where to look.
 
 Useful checks in the Databricks SQL editor:
 ```sql

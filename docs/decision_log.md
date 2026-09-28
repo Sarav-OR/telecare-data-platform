@@ -1,7 +1,7 @@
 # Decision log
 
 One line per decision or incident: what happened, why, what we chose. The backbone for the
-README "trade-offs" section and for interview stories.
+README "trade-offs" section and for onboarding new team members.
 
 | # | Date | Area | What happened / what we decided | Why |
 |---|---|---|---|---|

@@ -15,3 +15,4 @@ databricks/.databricks/
 # secrets never go to git
 .env
 *.pem
+*.pbix

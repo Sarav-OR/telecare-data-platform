@@ -9,11 +9,11 @@ Every step of the setup guides answers three questions:
 |---|---|
 | **Cloud / platform engineer** (sometimes "DevOps" or "cloud admin") | Subscriptions, resource groups, networking, Key Vault, storage accounts, Databricks workspaces, Unity Catalog metastore, cluster policies – usually as Infrastructure-as-Code (Terraform / Bicep) |
 | **Identity / security admin** | Entra ID users, groups, service principals, role assignments, PII access groups |
-| **Data engineer** (you) | Pipelines (ADF), ingestion code (Databricks), transformations (dbt), tests, CI/CD pipelines for the data code |
+| **Data engineer** | Pipelines (ADF), ingestion code (Databricks), transformations (dbt), tests, CI/CD pipelines for the data code |
 | **Analytics engineer / BI** | Marts, semantic models, dashboards |
 | **Source-system owners** (EHR team, telephony vendor, CRM team) | Delivering the data, schemas, data contracts |
 
-In this project **you play all roles**. In the interview you can say which role each step belongs to.
+In this project **one engineer covers all roles**; each step below states which role would own it in a real team.
 
 ---
 
@@ -60,11 +60,11 @@ In this project **you play all roles**. In the interview you can say which role 
 | C5 First build in the IDE | Proves models + tests work on real data | Developers build and test on their branch before opening a PR | Developer |
 | C6 Production environment + job | Scheduled, reproducible prod builds | Triggered by the orchestrator (ADF/Airflow) via API after ingestion, or on a schedule with freshness gates | Data engineer; on-call for failures |
 | C7 CI job on pull requests | Every change is built and tested before merge | Mandatory PR check; merge blocked if it fails | Team (enforced by branch protection) |
-| C8 Screenshots | Portfolio evidence | Documentation lives in dbt Docs / data catalog | – |
+| C8 Screenshots | Run evidence for the README | Documentation lives in dbt Docs / data catalog | – |
 
 ---
 
-## One-line summary for the interview
+## Summary
 
 > "In this project I played all roles – platform, security and data engineer. In a real team
 > the platform team provisions infrastructure as code, security manages identities and PII

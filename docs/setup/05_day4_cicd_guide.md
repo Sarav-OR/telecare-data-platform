@@ -68,7 +68,7 @@ GitHub → **Settings → Branches → Add branch ruleset** (or *Add classic bra
 - ✅ Require a pull request before merging (approvals: 0 – you are the only developer)
 - ✅ Require status checks to pass: `lint-and-unit-tests`, `end-to-end`, `dbt Cloud — telecare_ci`
 - ✅ Block force pushes
-- Bypass: allow **repository admins** (you) – for emergencies only; say so in the interview
+- Bypass: allow **repository admins** – for emergencies only, and documented as a known exception
 
 > ADF note: ADF's Git mode saves to `main` directly. With protection on, create a **working
 > branch in ADF** (branch dropdown → *New branch*), save there, open a PR, merge, then Publish

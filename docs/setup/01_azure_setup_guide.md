@@ -140,8 +140,7 @@ Portal → **SQL databases** → **Create**. At the top of the form look for the
 | SQL admin login | `sqladmin_telecare` + a strong password |
 | **Free offer – behavior when limit is reached** | **Auto-pause the database until next month** (guarantees no charge) |
 
-If the free-offer banner is not shown in Switzerland North, tell me before continuing — the
-fallback is *General Purpose → Serverless*, min 0.5 vCores, **auto-pause after 1 hour**
+If the free-offer banner is not shown in Switzerland North, the fallback is *General Purpose → Serverless*, min 0.5 vCores, **auto-pause after 1 hour**
 (a few CHF at most for the week).
 
 **Networking**
@@ -227,7 +226,7 @@ Open the workspace. **Do not create a cluster** – everything below uses the UI
 
 ### A8.1 Check Unity Catalog
 **Catalog** (left menu) → the Catalog Explorer should show a metastore and catalogs such as
-`system` / `samples`. If you only see `hive_metastore`, stop and tell me.
+`system` / `samples`. If you only see `hive_metastore`, Unity Catalog is not enabled – fix that before continuing.
 
 ### A8.2 Storage credential
 Catalog → ⚙ / **External data** → **Credentials** → **Create credential**
@@ -299,14 +298,14 @@ github.com → **New repository**
 | Setting | Value |
 |---|---|
 | Name | `telecare-data-platform` |
-| Visibility | **Private** for now (made public after a secrets review on Day 5) |
+| Visibility | **Private** until a secrets review has been done, then public |
 | Initialize | nothing (no README, no .gitignore) – the code will be pushed from the prepared repo |
 
 ---
 
-## Send back when done
+## Record when done
 
-Copy this table into the chat with the actual values (only names/IDs, **never passwords or keys**):
+Keep a record of the created resources (only names/IDs, **never passwords or keys**) – later steps and `config/environments/*.yml` refer to them:
 
 | Item | Value |
 |---|---|
